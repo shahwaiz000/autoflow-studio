@@ -1,7 +1,20 @@
 import { Link, useParams } from "react-router-dom";
 import { Card, ErrorBox, Loading, PageHeader, StatusBadge } from "../components/ui";
+import FlowDiagram from "../components/FlowDiagram";
 import { formatDate, formatDuration, useApi } from "../lib";
-import type { Execution } from "../types";
+import type { Execution, Workflow } from "../types";
+
+function RunDiagram({ ex }: { ex: Execution }) {
+  const { data } = useApi<Workflow>(`/workflows/${ex.workflow_id}`);
+  if (!data?.definition) return null;
+  const results = Object.fromEntries((ex.steps ?? []).map((s) => [s.step_id, s.status]));
+  return (
+    <Card title="Flow of this run" className="mb-4">
+      <FlowDiagram steps={data.definition.steps} results={results} />
+      <p className="mt-1 text-center text-xs text-slate-400">Drawn from the workflow as it is saved now.</p>
+    </Card>
+  );
+}
 
 export default function ExecutionDetail() {
   const { id } = useParams();
@@ -22,6 +35,7 @@ export default function ExecutionDetail() {
         </dl>
         {ex.error_message && <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-800">{ex.error_message}</p>}
       </Card>
+      <RunDiagram ex={ex} />
       <Card title="Step log">
         <ol className="space-y-3">
           {ex.steps?.map((s) => (

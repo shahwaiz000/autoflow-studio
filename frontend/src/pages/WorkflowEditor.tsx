@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Card, ErrorBox, Loading, PageHeader } from "../components/ui";
+import FlowDiagram from "../components/FlowDiagram";
 import { api, useApi } from "../lib";
 import type { Workflow } from "../types";
 
@@ -153,6 +154,9 @@ export default function WorkflowEditor() {
           <label>Category<input className={input} value={category} maxLength={60} onChange={(e) => setCategory(e.target.value)} /></label>
           <label className="sm:col-span-3">Description<input className={input} value={description} maxLength={500} onChange={(e) => setDescription(e.target.value)} /></label>
         </div>
+      </Card>
+      <Card title="Flow preview" className="mb-4">
+        <FlowDiagram steps={steps.map((s) => ({ id: s.id, type: s.type, name: s.name, next: s.next || undefined, config: s.config }))} />
       </Card>
       <div className="space-y-3">
         {steps.map((s, i) => (

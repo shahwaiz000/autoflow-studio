@@ -1,0 +1,33 @@
+import { buildEdges, layout, FlowStep } from "./flow";
+
+const s = (id: string, type: string, extra: Partial<FlowStep> = {}): FlowStep => ({ id, type, name: id, ...extra });
+
+it("connects a simple list in order", () => {
+  const edges = buildEdges([s("a", "trigger"), s("b", "load_csv"), s("c", "end")]);
+  expect(edges).toEqual([{ from: "a", to: "b" }, { from: "b", to: "c" }]);
+});
+
+it("draws true and false branches and honours an explicit next", () => {
+  const steps = [s("t", "trigger"), s("c", "condition", { config: { on_true: "n", on_false: "r" } }),
+    s("n", "notify", { next: "r" }), s("r", "report"), s("e", "end")];
+  const edges = buildEdges(steps);
+  expect(edges).toContainEqual({ from: "c", to: "n", label: "true" });
+  expect(edges).toContainEqual({ from: "c", to: "r", label: "false" });
+  expect(edges).toContainEqual({ from: "n", to: "r" });
+  const { placed } = layout(steps, edges);
+  const lvl = (id: string) => placed.find((p) => p.step.id === id)!.level;
+  expect(lvl("r")).toBeGreaterThan(lvl("n"));  // report sits below notify, not beside it
+});
+
+it("marks steps that can never be reached and survives loops", () => {
+  const steps = [s("a", "trigger", { next: "c" }), s("b", "report"), s("c", "load_csv", { next: "a" })];
+  const { placed } = layout(steps, buildEdges(steps));
+  expect(placed.find((p) => p.step.id === "b")!.reached).toBe(false);
+  expect(placed).toHaveLength(3);
+});
+
+it("leaves room for arrows that skip a row", () => {
+  const plain = layout([s("a", "trigger"), s("b", "end")], [{ from: "a", to: "b" }]);
+  const steps = [s("t", "trigger"), s("c", "condition", { config: { on_true: "n", on_false: "r" } }), s("n", "notify", { next: "r" }), s("r", "report")];
+  expect(layout(steps, buildEdges(steps)).width).toBeGreaterThan(plain.width);
+});
