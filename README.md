@@ -1,68 +1,79 @@
-# AutoFlow Studio v0.1
+# AutoFlow Studio
 
-A business workflow automation platform: a FastAPI backend with a real execution engine, a SQLite database, and a React + TypeScript dashboard. Everything is free and runs locally. All data is fictional.
+A business workflow automation platform. You build workflows from simple steps, run them, and watch the results. Everything runs locally and uses free tools. **All data in this project is fictional.**
 
-## What works in v0.1
+> Status: v0.3, work in progress. The sections below say exactly what works and what does not.
 
-- Dashboard with metrics computed from the database (totals, success rate, average duration, 14-day trend, failure reasons, per-workflow runs)
-- Workflow library: search, filter, enable/disable, view steps, run
-- Execution engine: ordered steps, conditional branching, per-step retries, per-step logs, durations, error messages
-- Execution history and detail pages with step-by-step logs
-- Idempotent seed data: 6 fictional workflows, sample CSVs, and 110 historical executions flagged `demo`
-- Tests: 12 backend (pytest), 3 frontend (Vitest)
+## What works today
 
-## Not built yet (shown as "Planned" in the sidebar)
+- **Dashboard.** Totals, success rate, average duration, a 14-day trend, recent runs and failure reasons, all calculated from the database.
+- **Workflow library.** Search, filter, enable or disable, view steps, and run a workflow. Running starts real processing on the backend.
+- **Workflow editor.** Create and edit workflows with a form. Add steps, reorder them, set retries, and branch with an if/else condition.
+- **Execution engine.** Runs steps in order, follows branches, retries failed steps, and records every step with its time and message. Only a fixed list of step types can run, so no user-written code is ever executed.
+- **Execution history.** Every run with status, duration, trigger, error message and a step-by-step log.
+- **CSV upload and cleaning.** Upload a CSV (max 5 MB). The app finds missing values, duplicates and text where numbers should be, cleans the file, and offers the cleaned file and a summary for download.
+- **Analytics.** Volume and duration charts, workflow comparison, common failure reasons, and a CSV export. A filter separates seeded demo data from your own runs.
+- **Tests.** 32 backend tests (pytest) and 5 frontend tests (Vitest).
 
-Visual workflow builder, creating/editing workflows, CSV upload, analytics page and CSV export, templates, AI assistant, scheduling. Notification steps only write to the log; nothing is emailed.
+## Not built yet
 
-## Setup on Windows 11
+Visual drag-and-drop builder, scheduling, templates, AI assistant, user accounts. Notification steps only write to the log. Nothing is emailed.
 
-You need **Python 3.11+** and **Node.js 20+** (both free). Check in any terminal: `python --version` and `node --version`.
+## Technology (all free)
 
-### Terminal 1: backend (PowerShell, inside the `backend` folder)
+React, TypeScript, Vite, Tailwind CSS, Recharts, Python, FastAPI, SQLAlchemy, SQLite, Pandas, pytest, Vitest.
+
+## Run it on Windows 11
+
+You need Python 3.12 or 3.13 and Node.js 20 or newer. Use two PowerShell windows and run the commands one at a time.
+
+**Window 1: backend**
 ```powershell
 cd autoflow-studio\backend
-python -m venv .venv
+py -3.13 -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 python -m pytest
-python -m uvicorn app.main:app --reload --port 8000
+python -m uvicorn app.main:app --port 8000
 ```
-If activation is blocked, run once: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
-API docs open at http://127.0.0.1:8000/docs. The database and sample CSVs are created on first start.
 
-### Terminal 2: frontend (a second PowerShell, inside the `frontend` folder)
+**Window 2: frontend**
 ```powershell
 cd autoflow-studio\frontend
 npm install
 npm test
 npm run dev
 ```
-Open http://localhost:5173.
 
-## Architecture
+Open http://localhost:5173. The API documentation is at http://127.0.0.1:8000/docs.
+
+## How it is built
 
 ```
 backend/app/
-  main.py       API routes + consistent error format
-  engine.py     workflow execution (whitelisted step types, no arbitrary code)
-  analytics.py  dashboard metrics from stored executions
-  models.py     Workflow, Execution, ExecutionStep (SQLAlchemy)
-  seed.py       idempotent fictional data
-frontend/src/   pages/, components/, lib.ts (API hook), types.ts
+  main.py         API routes and a consistent error format
+  engine.py       workflow execution (whitelisted step types)
+  definitions.py  checks every workflow the editor saves
+  analytics.py    dashboard and analytics numbers, CSV export
+  models.py       Workflow, Execution, ExecutionStep tables
+  seed.py         fictional sample data (safe to run many times)
+frontend/src/
+  pages/          Dashboard, Workflows, Editor, Executions, Analytics, Upload
 ```
 
-Step types: `trigger`, `load_csv`, `validate`, `condition`, `transform`, `notify`, `report`, `end`. Conditions use a fixed operator table (`> >= < <= == !=`); CSV paths are restricted to `backend/data/samples`.
+## Safety choices
 
-## API
-
-`GET /api/health` - `GET /api/dashboard` - `GET /api/workflows` - `GET|PATCH /api/workflows/{id}` - `POST /api/workflows/{id}/run` - `GET /api/executions` - `GET /api/executions/{id}`
-
-Errors always look like `{"error": {"code": "...", "message": "..."}}`.
+- Workflows are data, not code. Unknown step types and settings are rejected.
+- CSV files are read only from fixed folders, and uploads are stored under random names.
+- Uploads are limited by type, size (5 MB) and row count (50,000).
+- Exported CSV files neutralise text that Excel could treat as a formula.
 
 ## Known limitations
 
-- Runs execute synchronously inside the request (fine for small CSVs; a task queue is the next step for long jobs).
-- Dashboard aggregation runs in Python, not SQL; fine for thousands of rows.
-- No authentication yet. Do not expose this to the internet.
-- `create_all` creates tables but does not migrate; add Alembic before changing models in a real deployment.
+- Runs happen inside the web request, which is fine for small files. A background queue is the next step for long jobs.
+- No login yet, so do not put this on the internet.
+- The database has no migration tool yet. Add one (Alembic) before changing tables on real data.
+
+## Screenshots
+
+Add screenshots to a `docs/screenshots` folder and link them here.
