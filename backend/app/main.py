@@ -17,6 +17,7 @@ from .engine import run_workflow
 from .models import Execution, Workflow
 from .definitions import clean_definition
 from .seed import WORKFLOWS, seed
+from .templates import TEMPLATES
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -271,3 +272,26 @@ def delete_workflow(wid: int, db: Session = Depends(get_db)):
     db.delete(wf)
     db.commit()
     return {"deleted": True}
+
+
+@app.get("/api/templates")
+def list_templates():
+    return [{**t, "step_count": len(t["steps"])} for t in TEMPLATES]
+
+
+@app.post("/api/templates/{key}/use", status_code=201)
+def use_template(key: str, db: Session = Depends(get_db)):
+    t = next((t for t in TEMPLATES if t["key"] == key), None)
+    if not t:
+        raise HTTPException(404, "Template not found")
+    definition, errs = clean_definition(t["steps"])
+    if errs:  # a broken built-in template is a bug on our side, not the user's
+        raise HTTPException(500, "Template is invalid: " + "; ".join(errs))
+    name, n = t["name"], 1
+    while _name_taken(db, name):
+        n += 1
+        name = f"{t['name']} (copy {n})"
+    wf = Workflow(name=name, description=t["description"], category=t["category"], definition=definition)
+    db.add(wf)
+    db.commit()
+    return _wf_dict(wf, True)

@@ -5,3 +5,7 @@
 
 body { @apply bg-slate-50 text-slate-800 antialiased; }
 :focus-visible { @apply outline-2 outline-offset-2 outline-brand; }
+
+.react-flow .react-flow__handle { width: 14px; height: 14px; background: #5b5ff0; border: 2px solid #fff; }
+.react-flow .react-flow__handle:hover { background: #4549d6; }
+.react-flow__edge-text { font-size: 11px; font-weight: 600; }

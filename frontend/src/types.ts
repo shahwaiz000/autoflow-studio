@@ -13,7 +13,7 @@ export interface Step {
 export interface Workflow {
   id: number; name: string; description: string; category: string; enabled: boolean;
   step_count: number; built_in?: boolean; run_count?: number; last_status?: Status | null;
-  definition?: { steps: { id: string; type: string; name: string; retries?: number; next?: string; config: Record<string, any> }[] };
+  definition?: { steps: { id: string; type: string; name: string; retries?: number; next?: string; pos?: { x: number; y: number }; config: Record<string, any> }[] };
 }
 export interface Dashboard {
   totals: {
@@ -41,4 +41,9 @@ export interface Analytics {
   workflows: { workflow: string; runs: number; failed: number; success_rate: number; avg_duration_seconds: number }[];
   failure_reasons: { reason: string; count: number }[];
   triggers: { trigger: string; count: number }[];
+}
+
+export interface Template {
+  key: string; name: string; description: string; category: string; tags: string[]; note: string; step_count: number;
+  steps: { id: string; type: string; name: string; next?: string; config?: Record<string, unknown> }[];
 }

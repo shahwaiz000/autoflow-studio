@@ -75,3 +75,17 @@ def test_every_seeded_workflow_passes_the_editor_checks(client):
 
 def test_sample_files_list(client):
     assert "invoices.csv" in client.get("/api/samples").json()
+
+
+def test_box_positions_are_saved_and_checked(client):
+    body = _body(name="With Positions")
+    for i, st in enumerate(body["steps"]):
+        st["pos"] = {"x": 10.26 * i, "y": 100 * i}
+    wid = client.post("/api/workflows", json=body).json()["id"]
+    saved = client.get(f"/api/workflows/{wid}").json()["definition"]["steps"]
+    assert saved[1]["pos"] == {"x": 10.3, "y": 100}
+    assert client.post("/api/workflows/%d/run" % wid).json()["status"] == "success"  # positions do not affect running
+    for bad in ({"x": "a", "y": 1}, {"x": 1}, {"x": 99999, "y": 0}, [1, 2]):
+        b = _body(name="Bad Pos")
+        b["steps"][0]["pos"] = bad
+        assert client.post("/api/workflows", json=b).status_code == 422

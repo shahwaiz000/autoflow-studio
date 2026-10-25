@@ -31,3 +31,36 @@ it("leaves room for arrows that skip a row", () => {
   const steps = [s("t", "trigger"), s("c", "condition", { config: { on_true: "n", on_false: "r" } }), s("n", "notify", { next: "r" }), s("r", "report")];
   expect(layout(steps, buildEdges(steps)).width).toBeGreaterThan(plain.width);
 });
+
+import { checkGraph, explicitEdges, withExplicitNext } from "./flow";
+
+it("turns the old 'next in the list' rule into real arrows", () => {
+  const steps = withExplicitNext([s("a", "trigger"), s("b", "report"), s("c", "end")]);
+  expect(explicitEdges(steps)).toEqual([{ from: "a", to: "b", handle: "next" }, { from: "b", to: "c", handle: "next" }]);
+});
+
+it("accepts a complete drawing", () => {
+  const steps = [s("a", "trigger", { next: "b" }), s("b", "end")];
+  expect(checkGraph(steps).messages).toEqual([]);
+});
+
+it("explains what is wrong with an unfinished drawing", () => {
+  const steps = [s("a", "trigger", { next: "b" }), s("b", "report"), s("c", "condition", { config: { on_true: "b" } }), s("d", "end")];
+  const { messages, ids } = checkGraph(steps);
+  expect(messages.join(" ")).toMatch(/no arrow leaving/);
+  expect(messages.join(" ")).toMatch(/true arrow and a false arrow/);
+  expect(messages.join(" ")).toMatch(/not connected to the start/);
+  expect([...ids].sort()).toEqual(["b", "c", "d"]);
+  expect(checkGraph([s("x", "report")]).messages[0]).toMatch(/exactly one Trigger/);
+});
+
+import { branchShifts } from "./flow";
+
+it("moves one-sided branches apart but leaves shared boxes in the middle", () => {
+  const steps = [s("t", "trigger", { next: "c" }), s("c", "condition", { config: { on_true: "n", on_false: "r" } }),
+    s("n", "notify", { next: "r" }), s("r", "report", { next: "e" }), s("e", "end")];
+  const m = branchShifts(steps);
+  expect(m.get("n")).toBeLessThan(0);
+  expect(m.get("r")).toBeUndefined();
+  expect(m.get("e")).toBeUndefined();
+});

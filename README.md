@@ -2,26 +2,29 @@
 
 A business workflow automation platform. You build workflows from simple steps, run them, and watch the results. Everything runs locally and uses free tools. **All data in this project is fictional.**
 
-> Status: v0.3, work in progress. The sections below say exactly what works and what does not.
+> Status: v0.6, work in progress. The sections below say exactly what works and what does not.
 
 ## What works today
 
 - **Dashboard.** Totals, success rate, average duration, a 14-day trend, recent runs and failure reasons, all calculated from the database.
 - **Workflow library.** Search, filter, enable or disable, view steps, and run a workflow. Running starts real processing on the backend.
-- **Workflow editor.** Create and edit workflows with a form. Add steps, reorder them, set retries, and branch with an if/else condition.
+- **Drag-and-drop builder.** Drag steps onto a canvas, draw arrows between them, click a box to change its settings, and save. A drawing is checked before saving (one Trigger, no loose ends). Built with React Flow (MIT license).
+- **Form editor.** The same workflows can also be edited with a plain form. Add steps, reorder them, set retries, and branch with an if/else condition.
 - **Execution engine.** Runs steps in order, follows branches, retries failed steps, and records every step with its time and message. Only a fixed list of step types can run, so no user-written code is ever executed.
+- **Flow diagrams.** Every workflow is drawn as boxes and arrows, with true/false branches. On a run's page the path that run took is colored.
+- **Templates.** Five ready-made workflows. One click makes your own editable copy.
 - **Execution history.** Every run with status, duration, trigger, error message and a step-by-step log.
 - **CSV upload and cleaning.** Upload a CSV (max 5 MB). The app finds missing values, duplicates and text where numbers should be, cleans the file, and offers the cleaned file and a summary for download.
 - **Analytics.** Volume and duration charts, workflow comparison, common failure reasons, and a CSV export. A filter separates seeded demo data from your own runs.
-- **Tests.** 32 backend tests (pytest) and 5 frontend tests (Vitest).
+- **Tests.** 37 backend tests (pytest) and 14 frontend tests (Vitest).
 
 ## Not built yet
 
-Visual drag-and-drop builder, scheduling, templates, AI assistant, user accounts. Notification steps only write to the log. Nothing is emailed.
+Scheduling, AI assistant, a Data Sources page, user accounts. Notification steps only write to the log. Nothing is emailed.
 
 ## Technology (all free)
 
-React, TypeScript, Vite, Tailwind CSS, Recharts, Python, FastAPI, SQLAlchemy, SQLite, Pandas, pytest, Vitest.
+React, TypeScript, Vite, Tailwind CSS, Recharts, React Flow, Python, FastAPI, SQLAlchemy, SQLite, Pandas, pytest, Vitest.
 
 ## Run it on Windows 11
 
@@ -57,8 +60,11 @@ backend/app/
   analytics.py    dashboard and analytics numbers, CSV export
   models.py       Workflow, Execution, ExecutionStep tables
   seed.py         fictional sample data (safe to run many times)
+  templates.py    ready-made workflow templates
 frontend/src/
-  pages/          Dashboard, Workflows, Editor, Executions, Analytics, Upload
+  pages/          Dashboard, Workflows, Builder, Editor, Templates, Executions, Analytics, Upload
+  flow.ts         layout and checks for the flow diagrams and the builder
+  components/     shared UI and the flow diagram
 ```
 
 ## Safety choices
@@ -76,4 +82,28 @@ frontend/src/
 
 ## Screenshots
 
-Add screenshots to a `docs/screenshots` folder and link them here.
+**Dashboard.** Numbers and charts are calculated from stored executions.
+
+![Dashboard](docs/screenshots/dashboard.png)
+
+**Workflow library.** Run, edit, enable or disable workflows.
+
+![Workflows](docs/screenshots/workflows.png)
+
+**Execution log.** Every step of a run, with timing and error messages.
+
+![Execution log](docs/screenshots/execution-log.png)
+
+**Analytics.** Volume, duration, workflow comparison and failure reasons.
+
+![Analytics](docs/screenshots/analytics.png)
+
+**Drag-and-drop builder.** Drag steps onto the canvas, draw arrows, and edit a box's settings on the right.
+
+![Builder](docs/screenshots/builder.png)
+
+**Flow of a run.** The diagram colors the path a run took.
+
+![Flow diagram](docs/screenshots/flow-diagram.png)
+
+All data shown is fictional.

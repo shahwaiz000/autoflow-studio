@@ -97,6 +97,14 @@ def clean_definition(raw_steps: list) -> tuple[dict | None, list[str]]:
             step["retries"] = retries
         if s.get("next"):
             step["next"] = s["next"]
+        pos = s.get("pos")  # where the box sits in the builder; the engine ignores it
+        if pos is not None:
+            ok = (isinstance(pos, dict) and set(pos) == {"x", "y"} and
+                  all(isinstance(v, (int, float)) and not isinstance(v, bool) and -10000 <= v <= 10000 for v in pos.values()))
+            if ok:
+                step["pos"] = {"x": round(pos["x"], 1), "y": round(pos["y"], 1)}
+            else:
+                errs.append(f"{where}: box position is not valid")
         steps.append(step)
     if errs:
         return None, errs

@@ -51,7 +51,7 @@ export default function Workflows() {
     <>
       <PageHeader title="Workflows" subtitle="Run a workflow to execute it on the backend and record the result.">
         <div className="flex flex-wrap gap-2">
-          <Link to="/workflows/new" className="rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand-dark">Create workflow</Link>
+          <Link to="/builder" className="rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand-dark">Create workflow</Link>
           <input aria-label="Search workflows" placeholder="Search workflows" value={search} onChange={(e) => setSearch(e.target.value)}
             className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
           <select aria-label="Filter by status" value={filter} onChange={(e) => setFilter(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
@@ -84,7 +84,7 @@ export default function Workflows() {
                   {busy === w.id ? "Running..." : "Run workflow"}
                 </button>
                 <button onClick={() => toggle(w)} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50">{w.enabled ? "Disable" : "Enable"}</button>
-                <Link to={`/workflows/${w.id}/edit`} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50">Edit</Link>
+                <Link to={`/builder/${w.id}`} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50">Edit</Link>
                 {!w.built_in && <button onClick={() => remove(w)} className="rounded-lg border border-red-200 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50">Delete</button>}
                 <button onClick={() => setOpen(open === w.id ? null : w.id)} aria-expanded={open === w.id} className="ml-auto text-sm text-brand-dark hover:underline">
                   {open === w.id ? "Hide steps" : "View steps"}

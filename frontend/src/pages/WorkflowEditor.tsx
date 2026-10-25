@@ -7,7 +7,7 @@ import type { Workflow } from "../types";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Cfg = Record<string, any>;
-export interface EStep { id: string; type: string; name: string; retries: number; next: string; config: Cfg }
+export interface EStep { id: string; type: string; name: string; retries: number; next: string; config: Cfg; pos?: { x: number; y: number } }
 
 export const TYPES: { value: string; label: string; name: string }[] = [
   { value: "trigger", label: "Trigger (start)", name: "Start" },
@@ -19,7 +19,7 @@ export const TYPES: { value: string; label: string; name: string }[] = [
   { value: "report", label: "Generate report", name: "Generate report" },
   { value: "end", label: "End", name: "Done" },
 ];
-const DEFAULTS: Record<string, Cfg> = {
+export const DEFAULTS: Record<string, Cfg> = {
   trigger: { kind: "manual" }, load_csv: { file: "" }, validate: { required_columns: [], numeric_columns: [], fail_on_errors: false },
   condition: { field: "invalid_rows", op: ">", value: "0", on_true: "", on_false: "" },
   transform: { operations: ["trim_text", "drop_duplicates"], numeric_columns: [] }, notify: { to: "team", message: "" }, report: {}, end: {},
@@ -36,7 +36,7 @@ function ListInput({ value, onChange, placeholder }: { value: string[]; onChange
     onChange={(e) => { setText(e.target.value); onChange(e.target.value.split(",").map((x) => x.trim()).filter(Boolean)); }} />;
 }
 
-function Fields({ step, steps, samples, set }: { step: EStep; steps: EStep[]; samples: string[]; set: (c: Cfg) => void }) {
+export function Fields({ step, steps, samples, set }: { step: EStep; steps: EStep[]; samples: string[]; set: (c: Cfg) => void }) {
   const c = step.config;
   const upd = (k: string, v: any) => set({ ...c, [k]: v });
   const targets = steps.filter((s) => s.id !== step.id);
@@ -106,7 +106,7 @@ export default function WorkflowEditor() {
     if (!id) return;
     api<Workflow>(`/workflows/${id}`).then((w) => {
       setName(w.name); setDescription(w.description); setCategory(w.category); setBuiltIn(!!w.built_in);
-      setSteps((w.definition?.steps ?? []).map((s) => ({ id: s.id, type: s.type, name: s.name, retries: s.retries ?? 0, next: s.next ?? "", config: { ...s.config } })));
+      setSteps((w.definition?.steps ?? []).map((s) => ({ id: s.id, type: s.type, name: s.name, retries: s.retries ?? 0, next: s.next ?? "", config: { ...s.config }, pos: s.pos })));
     }).catch((e: Error) => setLoadError(e.message)).finally(() => setLoading(false));
   }, [id]);
 
@@ -129,7 +129,7 @@ export default function WorkflowEditor() {
   async function save() {
     setSaving(true); setError(null);
     const payload = { name, description, category, steps: steps.map((s) => ({
-      id: s.id, type: s.type, name: s.name, retries: s.retries, ...(s.next && s.type !== "end" ? { next: s.next } : {}),
+      id: s.id, type: s.type, name: s.name, retries: s.retries, ...(s.next && s.type !== "end" ? { next: s.next } : {}), ...(s.pos ? { pos: s.pos } : {}),
       config: s.type === "condition" ? { ...s.config, value: s.config.value === "" ? "" : Number(s.config.value) } : s.config })) };
     try {
       await api(id ? `/workflows/${id}` : "/workflows", { method: id ? "PUT" : "POST", body: JSON.stringify(payload) });
@@ -142,7 +142,8 @@ export default function WorkflowEditor() {
   if (loadError) return <ErrorBox message={loadError} />;
   return (
     <>
-      <Link to="/workflows" className="mb-3 inline-block text-sm text-brand-dark hover:underline">Back to workflows</Link>
+      <div className="mb-3 flex gap-4 text-sm"><Link to="/workflows" className="text-brand-dark hover:underline">Back to workflows</Link>
+        <Link to={id ? `/builder/${id}` : "/builder"} className="text-brand-dark hover:underline">Switch to the drag-and-drop builder</Link></div>
       <PageHeader title={id ? "Edit workflow" : "Create workflow"} subtitle="Steps run from top to bottom. Use a Condition step to branch.">
         <button onClick={save} disabled={saving} className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50">{saving ? "Saving..." : "Save workflow"}</button>
       </PageHeader>

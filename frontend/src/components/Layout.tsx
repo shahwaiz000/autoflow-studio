@@ -2,11 +2,13 @@ import { NavLink, Outlet } from "react-router-dom";
 
 const LIVE = [
   { to: "/", label: "Dashboard", end: true }, { to: "/workflows", label: "Workflows" },
+  { to: "/builder", label: "Builder" },
+  { to: "/templates", label: "Templates" },
   { to: "/executions", label: "Executions" },
   { to: "/analytics", label: "Analytics" },
   { to: "/upload", label: "Upload CSV" },
 ];
-const SOON = ["Workflow Builder", "Templates", "Data Sources", "AI Assistant"];
+const SOON = ["Data Sources", "AI Assistant"];
 
 export default function Layout() {
   return (
