@@ -3,8 +3,15 @@
 @tailwind components;
 @tailwind utilities;
 
-body { @apply bg-slate-50 text-slate-800 antialiased; }
+body { @apply bg-canvas text-slate-800 antialiased; font-feature-settings: "cv11", "ss01"; }
 :focus-visible { @apply outline-2 outline-offset-2 outline-brand; }
+
+/* Numbers line up in columns and do not jump while values change. */
+.num { font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
 
 .react-flow .react-flow__handle { width: 14px; height: 14px; background: #5b5ff0; border: 2px solid #fff; }
 .react-flow .react-flow__handle:hover { background: #4549d6; }
