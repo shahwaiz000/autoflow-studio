@@ -37,11 +37,11 @@ class RunQueue:
     def waiting(self) -> int:
         return self._q.qsize()
 
-    def submit(self, db: Session, wf: Workflow, trigger_type: str = "manual") -> Execution:
+    def submit(self, db: Session, wf: Workflow, trigger_type: str = "manual", inputs: dict | None = None) -> Execution:
         """Record the run as 'queued' and hand it to the worker. The steps are read when the run starts."""
         if self._q.full():
             raise QueueFull(f"{MAX_WAITING} runs are already waiting. Try again in a moment")
-        ex = create_execution(db, wf, trigger_type, status="queued")
+        ex = create_execution(db, wf, trigger_type, status="queued", inputs=inputs)
         self._q.put_nowait(ex.id)
         return ex
 

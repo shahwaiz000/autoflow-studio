@@ -1,7 +1,7 @@
 import { FlowStep, NODE_H, NODE_W, buildEdges, layout } from "../flow";
 
 export const COLORS: Record<string, [string, string, string]> = {  // [fill, border, label]
-  trigger: ["#eef0ff", "#5b5ff0", "Trigger"], load_csv: ["#e0f2fe", "#0284c7", "Load CSV"], validate: ["#cffafe", "#0891b2", "Validate"],
+  trigger: ["#eef0ff", "#5b5ff0", "Trigger"], load_csv: ["#e0f2fe", "#0284c7", "Load file"], validate: ["#cffafe", "#0891b2", "Validate"],
   condition: ["#fef3c7", "#d97706", "Condition"], transform: ["#f3e8ff", "#9333ea", "Clean data"], notify: ["#fce7f3", "#db2777", "Notify"],
   report: ["#dcfce7", "#16a34a", "Report"], end: ["#f1f5f9", "#64748b", "End"],
 };

@@ -41,12 +41,12 @@ export default function Upload() {
   const m = result?.metrics;
   return (
     <>
-      <PageHeader title="Upload CSV" subtitle="Check a CSV file for problems, clean it, and download the result. Use fictional data only." />
+      <PageHeader title="Upload CSV" subtitle="Check a CSV or Excel file for problems, clean it, and download the result. Use fictional data only." />
       <div className="grid gap-4 lg:grid-cols-5">
         <Card title="1. Choose a file" className="lg:col-span-2">
           <form onSubmit={submit} className="space-y-4 text-sm">
-            <label className="block">CSV file (max 5 MB)
-              <input type="file" accept=".csv" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className={field} />
+            <label className="block">CSV or Excel (.xlsx) file, max 5 MB. Excel uses the first sheet.
+              <input type="file" accept=".csv,.xlsx" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className={field} />
             </label>
             <label className="block">Required columns (optional)
               <input value={required} onChange={(e) => setRequired(e.target.value)} placeholder="invoice_id, vendor, amount" className={field} />

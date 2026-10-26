@@ -11,8 +11,9 @@ from pathlib import Path
 import pandas as pd
 from sqlalchemy.orm import Session
 
+from . import tables
 from .config import settings
-from .models import Execution, ExecutionStep, Workflow, utcnow
+from .models import Execution, ExecutionInput, ExecutionStep, Workflow, utcnow
 
 log = logging.getLogger("autoflow.engine")
 
@@ -21,8 +22,8 @@ OPS = {
     "<=": lambda a, b: a <= b, "==": lambda a, b: a == b, "!=": lambda a, b: a != b,
 }
 MAX_STEPS = 50          # guards against accidental loops
-MAX_CSV_BYTES = 5_000_000
-MAX_ROWS = 50_000
+MAX_CSV_BYTES = tables.MAX_BYTES
+MAX_ROWS = tables.MAX_ROWS
 
 
 class StepError(Exception):
@@ -31,7 +32,10 @@ class StepError(Exception):
 
 class Context:
     def __init__(self):
-        self.df: pd.DataFrame | None = None
+        self.df: pd.DataFrame | None = None       # the table the next step works on by default
+        self.frames: dict[str, pd.DataFrame] = {}  # every loaded table, by name
+        self.current: str = "main"
+        self.inputs: dict[str, dict] = {}          # files chosen for this run: name -> {source, file}
         self.metrics: dict = {"invalid_rows": 0, "missing_values": 0}
         self.details: dict = {}
         self.execution_id: int | None = None
@@ -42,35 +46,54 @@ def h_trigger(cfg, ctx):
 
 
 def h_load_csv(cfg, ctx):
-    name = Path(str(cfg.get("file", ""))).name  # file name only: no path traversal
-    folder = settings.uploads_dir if cfg.get("source") == "uploads" else settings.samples_dir
+    """Load a CSV or Excel file into a named table. The file is either fixed in the workflow or chosen when the run starts."""
+    table = cfg.get("table") or "main"
+    if cfg.get("input"):
+        chosen = ctx.inputs.get(cfg["input"])
+        if not chosen:
+            raise StepError(f"No file was chosen for '{cfg['input']}'. Choose one when you run the workflow")
+        source, name = chosen["source"], chosen["file"]
+    else:
+        source, name = ("uploads" if cfg.get("source") == "uploads" else "samples"), str(cfg.get("file", ""))
+    name = Path(name).name  # file name only: no path traversal
+    folder = settings.uploads_dir if source == "uploads" else settings.samples_dir
     path = folder / name
-    if not name.lower().endswith(".csv") or not path.is_file():
-        raise StepError(f"CSV file '{name}' was not found")
-    if path.stat().st_size > MAX_CSV_BYTES:
-        raise StepError(f"The file is larger than the {MAX_CSV_BYTES // 1_000_000} MB limit")
+    if not tables.is_supported(name) or not path.is_file():
+        raise StepError(f"File '{name}' was not found. Check Data Sources")
     try:
-        df = pd.read_csv(path)
-    except Exception:
-        raise StepError("The file could not be read as a CSV table. Check that it is a plain comma-separated file")
+        df = tables.read_table(path, sheet=cfg.get("sheet") or None)
+    except tables.TableError as e:
+        raise StepError(str(e))
     if df.empty:
         raise StepError("The file has a header but no data rows")
-    if len(df) > MAX_ROWS:
-        raise StepError(f"The file has more than {MAX_ROWS:,} rows, which is over the limit")
-    ctx.df = df
+    ctx.frames[table] = df
+    ctx.df, ctx.current = df, table
     ctx.metrics["rows_loaded"] = len(df)
     ctx.details["columns"] = [str(c) for c in df.columns]
-    return f"Loaded {len(df)} rows and {len(df.columns)} columns"
+    ctx.details.setdefault("tables", {})[table] = {"file": name, "rows": len(df), "columns": len(df.columns)}
+    return f"Loaded {len(df)} rows and {len(df.columns)} columns from {name} into table '{table}'"
 
 
-def _need_df(ctx):
+def _need_df(ctx, cfg=None):
+    """The table a step works on: the one it names, or the one loaded most recently."""
+    name = (cfg or {}).get("table")
+    if name:
+        if name not in ctx.frames:
+            raise StepError(f"Table '{name}' has not been loaded. Add a Load step for it first")
+        return ctx.frames[name]
     if ctx.df is None:
-        raise StepError("No data loaded. Add a 'Load CSV' step before this one")
+        raise StepError("No data loaded. Add a 'Load file' step before this one")
     return ctx.df
 
 
+def _put(ctx, cfg, df):
+    name = cfg.get("table") or ctx.current
+    ctx.frames[name] = df
+    ctx.df, ctx.current = df, name
+
+
 def h_validate(cfg, ctx):
-    df = _need_df(ctx)
+    df = _need_df(ctx, cfg)
     required = cfg.get("required_columns", [])
     numeric = cfg.get("numeric_columns", [])
     missing_cols = [c for c in required + numeric if c not in df.columns]
@@ -106,30 +129,64 @@ def h_condition(cfg, ctx):
     return f"{field} {op} {cfg.get('value')} is {result}", nxt
 
 
+def _columns_exist(df, cols):
+    missing = [c for c in cols if c not in df.columns]
+    if missing:
+        raise StepError(f"Missing required columns: {', '.join(dict.fromkeys(missing))}")
+
+
 def h_transform(cfg, ctx):
-    df = _need_df(ctx)
+    df = _need_df(ctx, cfg)
     before = len(df)
     ops = cfg.get("operations", [])
+    fixed = unreadable = 0
     for op in ops:
         if op == "drop_duplicates":
             df = df.drop_duplicates()
         elif op == "drop_missing":
             df = df.dropna()
         elif op == "drop_invalid_numbers":
+            _columns_exist(df, cfg.get("numeric_columns", []))
             for c in cfg.get("numeric_columns", []):
-                if c not in df.columns:
-                    raise StepError(f"Missing required columns: {c}")
                 ok = df[c].isna() | pd.to_numeric(df[c], errors="coerce").notna()  # empty cells are handled elsewhere
                 df = df[ok]
         elif op == "trim_text":
             df = df.copy()
             for c in df.select_dtypes(include=["object", "string"]).columns:
                 df[c] = df[c].str.strip()
+        elif op == "normalize_amounts":
+            cols = cfg.get("amount_columns", [])
+            _columns_exist(df, cols)
+            df = df.copy()
+            for c in cols:
+                df[c], n, bad = tables.normalize_amounts(df[c])
+                fixed, unreadable = fixed + n, unreadable + bad
+        elif op == "parse_dates":
+            cols = cfg.get("date_columns", [])
+            _columns_exist(df, cols)
+            df = df.copy()
+            for c in cols:
+                df[c], n, bad = tables.parse_dates(df[c], dayfirst=cfg.get("dayfirst", True) is not False)
+                fixed, unreadable = fixed + n, unreadable + bad
+        elif op == "standardize_text":
+            cols = cfg.get("text_columns", [])
+            _columns_exist(df, cols)
+            df = df.copy()
+            for c in cols:
+                df[c], n = tables.standardize_text(df[c])
+                fixed += n
         else:
             raise StepError(f"Unsupported transform '{op}'")
-    ctx.df = df
+    _put(ctx, cfg, df)
     ctx.metrics["rows_after_cleaning"] = len(df)
-    return f"Applied {', '.join(ops) or 'no operations'}: {before} -> {len(df)} rows"
+    ctx.metrics["values_fixed"] = ctx.metrics.get("values_fixed", 0) + fixed
+    ctx.metrics["values_unreadable"] = ctx.metrics.get("values_unreadable", 0) + unreadable
+    msg = f"Applied {', '.join(ops) or 'no operations'}: {before} -> {len(df)} rows"
+    if fixed or unreadable:
+        msg += f". {fixed} values were reformatted"
+        if unreadable:
+            msg += f", {unreadable} could not be read and were left empty"
+    return msg
 
 
 def h_notify(cfg, ctx):
@@ -137,14 +194,48 @@ def h_notify(cfg, ctx):
     return f"Notification recorded for {cfg.get('to', 'team')}: {cfg.get('message', '')}"
 
 
+def profile(df: pd.DataFrame) -> pd.DataFrame:
+    """One row per column: what it holds, what is missing, and totals for number columns."""
+    rows = []
+    for c in df.columns:
+        col = df[c]
+        numeric = pd.to_numeric(col, errors="coerce")
+        is_num = bool(col.notna().any()) and bool(numeric.notna().sum() == col.notna().sum())
+        rows.append({
+            "column": c, "type": "number" if is_num else "text", "filled": int(col.notna().sum()),
+            "missing": int(col.isna().sum()), "unique_values": int(col.nunique(dropna=True)),
+            "total": round(float(numeric.sum()), 2) if is_num else "", "smallest": float(numeric.min()) if is_num else "",
+            "largest": float(numeric.max()) if is_num else "",
+            "average": round(float(numeric.mean()), 2) if is_num else "",
+            "most_common": "" if is_num or col.dropna().empty else str(col.value_counts().index[0])[:60],
+        })
+    return pd.DataFrame(rows)
+
+
 def h_report(cfg, ctx):
-    df = _need_df(ctx)
+    """Write the cleaned data, a column-by-column summary, and one Excel workbook with both plus the run facts."""
+    from .analytics import safe_cell
+    df = _need_df(ctx, cfg)
     settings.reports_dir.mkdir(parents=True, exist_ok=True)
-    out = settings.reports_dir / f"execution_{ctx.execution_id}_summary.csv"
-    df.describe(include="all").transpose().to_csv(out)
-    df.to_csv(settings.reports_dir / f"execution_{ctx.execution_id}_processed.csv", index=False)
+    base = settings.reports_dir / f"execution_{ctx.execution_id}"
+    prof = profile(df)
+    prof.to_csv(f"{base}_summary.csv", index=False)
+    df.to_csv(f"{base}_processed.csv", index=False)
+    facts = [("Rows in the report", len(df)), ("Columns", len(df.columns)),
+             *[(k.replace("_", " ").capitalize(), v) for k, v in ctx.metrics.items() if isinstance(v, (int, float))]]
+    safe = df.head(MAX_ROWS).copy()
+    for c in safe.select_dtypes(include=["object", "string"]).columns:
+        safe[c] = safe[c].map(lambda v: safe_cell(v) if isinstance(v, str) else v)  # text must never become an Excel formula
+    with pd.ExcelWriter(f"{base}_report.xlsx", engine="openpyxl") as xw:
+        pd.DataFrame(facts, columns=["What", "Value"]).to_excel(xw, sheet_name="Summary", index=False)
+        prof.to_excel(xw, sheet_name="Columns", index=False)
+        safe.to_excel(xw, sheet_name="Data", index=False)
+        for ws in xw.book.worksheets:
+            ws.freeze_panes = "A2"
+            for col in ws.columns:
+                ws.column_dimensions[col[0].column_letter].width = min(40, max(10, max(len(str(c.value or "")) for c in col[:200]) + 2))
     ctx.metrics.setdefault("rows_after_cleaning", len(df))
-    return f"Summary report and processed data written for {len(df)} rows"
+    return f"Report written for {len(df)} rows: summary, cleaned data and an Excel workbook"
 
 
 def h_end(cfg, ctx):
@@ -176,16 +267,29 @@ def validate_definition(defn: dict) -> list[str]:
     return errors
 
 
-def create_execution(db: Session, workflow: Workflow, trigger_type: str = "manual", status: str = "running") -> Execution:
+def required_inputs(defn: dict) -> list[dict]:
+    """Files a workflow asks for when it is run: [{name, label}] taken from its Load steps."""
+    out = []
+    for s in defn.get("steps", []):
+        if s.get("type") == "load_csv" and s.get("config", {}).get("input"):
+            out.append({"name": s["config"]["input"], "label": s.get("name", s["config"]["input"])})
+    return out
+
+
+def create_execution(db: Session, workflow: Workflow, trigger_type: str = "manual", status: str = "running",
+                     inputs: dict[str, dict] | None = None) -> Execution:
     ex = Execution(workflow=workflow, trigger_type=trigger_type, status=status, started_at=utcnow())
+    for name, f in (inputs or {}).items():
+        ex.inputs.append(ExecutionInput(name=name, source=f["source"], file=f["file"]))
     db.add(ex)
     db.commit()
     return ex
 
 
-def run_workflow(db: Session, workflow: Workflow, trigger_type: str = "manual", definition: dict | None = None) -> Execution:
+def run_workflow(db: Session, workflow: Workflow, trigger_type: str = "manual", definition: dict | None = None,
+                 inputs: dict[str, dict] | None = None) -> Execution:
     """Run now, inside the caller's thread."""
-    return execute(db, create_execution(db, workflow, trigger_type), definition)
+    return execute(db, create_execution(db, workflow, trigger_type, inputs=inputs), definition)
 
 
 def execute(db: Session, ex: Execution, definition: dict | None = None) -> Execution:
@@ -196,6 +300,7 @@ def execute(db: Session, ex: Execution, definition: dict | None = None) -> Execu
     defn = definition or workflow.definition
     ctx = Context()
     ctx.execution_id = ex.id
+    ctx.inputs = {i.name: {"source": i.source, "file": i.file} for i in ex.inputs}
     t0 = time.perf_counter()
     try:
         problems = validate_definition(defn)

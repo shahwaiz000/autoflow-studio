@@ -4,15 +4,17 @@ export interface Execution {
   id: number; workflow_id: number; workflow_name: string; status: Status;
   trigger_type: string; started_at: string; finished_at: string | null;
   duration_seconds: number | null; error_message: string | null; is_demo: boolean;
-  steps?: Step[];
+  steps?: Step[]; inputs?: RunInput[];
 }
+export interface RunInput { name: string; source: "samples" | "uploads"; file: string }
+export interface WorkflowInput { name: string; label: string }
 export interface Step {
   position: number; step_id: string; step_type: string; name: string;
   status: "success" | "failed"; attempts: number; message: string; duration_ms: number;
 }
 export interface Workflow {
   id: number; name: string; description: string; category: string; enabled: boolean;
-  step_count: number; built_in?: boolean; run_count?: number; last_status?: Status | null;
+  step_count: number; built_in?: boolean; run_count?: number; last_status?: Status | null; inputs?: WorkflowInput[];
   definition?: { steps: { id: string; type: string; name: string; retries?: number; next?: string; pos?: { x: number; y: number }; config: Record<string, any> }[] };
 }
 export interface Dashboard {
@@ -78,7 +80,7 @@ export interface SchedulerStatus { running: boolean; checks_every_seconds: numbe
 
 export interface DataFile {
   name: string; source: "samples" | "uploads"; rows: number | null; columns: string[]; readable: boolean;
-  size_bytes: number; modified_at: string | null; used_by: string[];
+  size_bytes: number; modified_at: string | null; used_by: string[]; sheets?: string[];
   original_name?: string | null; uploaded_at?: string | null; execution_id?: number | null;
 }
 export interface DataCatalog { samples: DataFile[]; uploads: DataFile[] }

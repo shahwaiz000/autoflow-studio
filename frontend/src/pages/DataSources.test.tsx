@@ -16,6 +16,7 @@ beforeEach(() => {
     const method = init?.method ?? "GET"; calls.push({ url, method });
     let body: unknown = {};
     if (url === "/api/datasources") body = { samples: [sample], uploads };
+    else if (url === "/api/datasources/uploads") body = { name: "n.xlsx", original_name: "new book.xlsx" };
     else if (url.includes("/preview")) body = { name: "x", readable: true, columns: ["name", "amount"], rows: [["Anna", "10"], ["Ben", "20"]] };
     return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
   }));
@@ -75,4 +76,15 @@ test("empty uploads show a friendly empty state", async () => {
   uploads = [];
   show();
   expect(await screen.findByText("No uploads yet")).toBeInTheDocument();
+});
+
+
+test("a file can be added and the list refreshes", async () => {
+  show();
+  await screen.findByText("my sales.csv");
+  const file = new File(["x"], "new book.xlsx");
+  fireEvent.change(screen.getByLabelText("Add a CSV or Excel file"), { target: { files: [file] } });
+  expect(await screen.findByText("new book.xlsx was added")).toBeInTheDocument();
+  expect(calls.some((c) => c.url === "/api/datasources/uploads" && c.method === "POST")).toBe(true);
+  expect(calls.filter((c) => c.url === "/api/datasources").length).toBeGreaterThanOrEqual(2);
 });

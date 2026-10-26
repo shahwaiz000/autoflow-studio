@@ -10,10 +10,10 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from . import analytics, assistant, auth, datasources, runqueue, schedules
+from . import analytics, assistant, auth, datasources, runqueue, schedules, tables
 from .config import settings
 from .database import Base, SessionLocal, engine, get_db
-from .engine import run_workflow
+from .engine import required_inputs, run_workflow
 from .models import Execution, Schedule, User, Workflow, iso, utcnow
 from .definitions import clean_definition
 from .seed import WORKFLOWS, seed
@@ -107,7 +107,8 @@ class WorkflowIn(BaseModel):
 
 
 def _wf_dict(wf: Workflow, definition: bool = False) -> dict:
-    return {**wf.to_dict(with_definition=definition), "built_in": wf.name in BUILT_IN}
+    return {**wf.to_dict(with_definition=definition), "built_in": wf.name in BUILT_IN,
+            "inputs": required_inputs(wf.definition)}
 
 
 def _get_workflow(db: Session, wid: int) -> Workflow:
@@ -158,22 +159,52 @@ def patch_workflow(wid: int, body: WorkflowPatch, db: Session = Depends(get_db))
     return wf.to_dict()
 
 
+class FileChoice(BaseModel):
+    source: str = Field(pattern="^(samples|uploads)$")
+    file: str = Field(max_length=100)
+
+
+class RunIn(BaseModel):
+    inputs: dict[str, FileChoice] = Field(default_factory=dict, max_length=10)
+
+
+def _resolve_inputs(wf: Workflow, body: RunIn | None) -> dict[str, dict]:
+    """The files chosen for this run. Every file slot the workflow asks for must be filled with a file that exists."""
+    need = required_inputs(wf.definition)
+    given = body.inputs if body else {}
+    unknown = set(given) - {n["name"] for n in need}
+    if unknown:
+        raise HTTPException(422, f"This workflow does not ask for: {', '.join(sorted(unknown))}")
+    out = {}
+    for n in need:
+        c = given.get(n["name"])
+        if not c:
+            raise HTTPException(422, f"Choose a file for '{n['label']}'")
+        if not datasources.safe_path(c.source, c.file):
+            raise HTTPException(422, f"The file '{c.file}' for '{n['label']}' was not found in Data Sources")
+        out[n["name"]] = {"source": c.source, "file": c.file}
+    return out
+
+
 @app.post("/api/workflows/{wid}/run", status_code=201)
-def run(wid: int, response: Response, background: bool = Query(False), db: Session = Depends(get_db)):
-    """Run now and wait for the result, or (background=true) queue it and return straight away."""
+def run(wid: int, response: Response, body: RunIn | None = None, background: bool = Query(False),
+        db: Session = Depends(get_db)):
+    """Run now and wait for the result, or (background=true) queue it and return straight away.
+    If the workflow asks for files at run time, send them as {"inputs": {"name": {"source": ..., "file": ...}}}."""
     wf = _get_workflow(db, wid)
     if not wf.enabled:
         raise HTTPException(409, f"Workflow '{wf.name}' is disabled. Enable it before running")
+    inputs = _resolve_inputs(wf, body)
     if background:
         if not runqueue.runner or not runqueue.runner.running:
             raise HTTPException(503, "The background queue is not running. Restart the backend")
         try:
-            ex = runqueue.runner.submit(db, wf, "manual")
+            ex = runqueue.runner.submit(db, wf, "manual", inputs)
         except runqueue.QueueFull as e:
             raise HTTPException(429, str(e))
         response.status_code = 202
-        return ex.to_dict(with_steps=True)
-    return run_workflow(db, wf, "manual").to_dict(with_steps=True)
+        return ex.to_dict()  # the run as it was queued; the worker may already be adding steps
+    return run_workflow(db, wf, "manual", inputs=inputs).to_dict(with_steps=True)
 
 
 @app.get("/api/queue/status")
@@ -204,7 +235,8 @@ def get_execution(eid: int, db: Session = Depends(get_db)):
 
 MAX_UPLOAD_BYTES = 5_000_000
 UPLOAD_WORKFLOW = "CSV Upload Cleaner"
-DOWNLOADS = {"processed": "processed.csv", "summary": "summary.csv"}
+DOWNLOADS = {"processed": "processed.csv", "summary": "summary.csv", "report": "report.xlsx"}
+XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
 def _split(text: str) -> list[str]:
@@ -217,8 +249,9 @@ async def upload_csv(file: UploadFile = File(...), required_columns: str = Form(
                      invalid_numbers: str = Form("keep"),
                      db: Session = Depends(get_db)):
     original = Path(file.filename or "upload.csv").name[:100]
-    if not original.lower().endswith(".csv"):
-        raise HTTPException(400, "Only .csv files are supported")
+    ext = Path(original).suffix.lower()
+    if ext not in tables.EXTS:
+        raise HTTPException(400, "Only .csv and .xlsx files are supported")
     if missing_values not in ("remove", "keep"):
         raise HTTPException(400, "missing_values must be 'remove' or 'keep'")
     if invalid_numbers not in ("remove", "keep"):
@@ -232,7 +265,7 @@ async def upload_csv(file: UploadFile = File(...), required_columns: str = Form(
     if not wf:
         raise HTTPException(500, "The upload workflow is missing. Restart the backend to re-create it")
     settings.uploads_dir.mkdir(parents=True, exist_ok=True)
-    stored = f"{uuid.uuid4().hex}.csv"  # random name: the original name is never used on disk
+    stored = f"{uuid.uuid4().hex}{ext}"  # random name: the original name is never used on disk
     (settings.uploads_dir / stored).write_bytes(data)
     numeric = _split(numeric_columns)
     ops = ["trim_text", "drop_duplicates"]
@@ -261,7 +294,7 @@ def download(eid: int, kind: str, db: Session = Depends(get_db)):
     path = settings.reports_dir / f"execution_{eid}_{DOWNLOADS[kind]}"
     if not path.is_file():
         raise HTTPException(404, "This execution did not produce that file")
-    return FileResponse(path, media_type="text/csv", filename=path.name)
+    return FileResponse(path, media_type=XLSX if kind == "report" else "text/csv", filename=path.name)
 
 
 SOURCE = "^(all|live|demo)$"
@@ -461,9 +494,21 @@ def list_datasources(db: Session = Depends(get_db)):
     return datasources.catalog(db)
 
 
+@app.post("/api/datasources/uploads", status_code=201)
+async def add_datasource(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """Add a CSV or Excel file to Data Sources without running anything, so it can be chosen when a workflow runs."""
+    data = await file.read(tables.MAX_BYTES + 1)
+    try:
+        saved = datasources.store_upload(db, file.filename or "upload.csv", data)
+    except tables.TableError as e:
+        raise HTTPException(400, str(e))
+    return next(f for f in datasources.catalog(db)["uploads"] if f["name"] == saved["name"])
+
+
 @app.get("/api/datasources/{source}/{name}/preview")
-def preview_datasource(source: str, name: str, rows: int = Query(10, ge=1, le=datasources.PREVIEW_MAX)):
-    d = datasources.preview(source, name, rows)
+def preview_datasource(source: str, name: str, rows: int = Query(10, ge=1, le=datasources.PREVIEW_MAX),
+                       sheet: str | None = Query(None, max_length=60)):
+    d = datasources.preview(source, name, rows, sheet)
     if d is None:
         raise HTTPException(404, "File not found")
     return d

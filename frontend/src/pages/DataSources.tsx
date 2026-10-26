@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Card, Empty, ErrorBox, Loading, PageHeader } from "../components/ui";
-import { api, formatDate, useApi } from "../lib";
+import { api, formatDate, uploadFile, useApi } from "../lib";
 import type { DataCatalog, DataFile, DataPreview } from "../types";
 
 export const formatBytes = (n: number) => (n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
@@ -42,6 +42,7 @@ function FileList({ title, files, hint, emptyTitle, onDelete }: {
                       {f.readable ? `${f.rows?.toLocaleString()} rows, ${f.columns.length} columns` : "No data rows or not readable"}, {formatBytes(f.size_bytes)}
                       {f.uploaded_at && `, uploaded ${formatDate(f.uploaded_at)}`}
                       {f.source === "uploads" && !f.original_name && ", original name not recorded"}
+                      {f.sheets && f.sheets.length > 1 && `, sheets: ${f.sheets.join(", ")}`}
                     </p>
                     {f.used_by.length > 0 && <p className="text-xs text-slate-500">Used by: {f.used_by.join(", ")}</p>}
                   </div>
@@ -71,6 +72,19 @@ export default function DataSources() {
   const { data, error, loading, reload } = useApi<DataCatalog>("/datasources");
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
+  async function add(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setMsg(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const saved = await uploadFile<DataFile>("/datasources/uploads", form);
+      setMsg({ ok: true, text: `${saved.original_name ?? saved.name} was added` }); reload();
+    } catch (err) { setMsg({ ok: false, text: (err as Error).message }); }
+  }
+
   async function remove(f: DataFile) {
     const label = f.original_name ?? f.name;
     if (!window.confirm(`Delete "${label}"? The file is removed. Past runs stay in the history.`)) return;
@@ -83,7 +97,11 @@ export default function DataSources() {
   return (
     <>
       <PageHeader title="Data Sources" subtitle="The CSV files your workflows can read. Look inside a file before you use it.">
-        <Link to="/upload" className="rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand-dark">Upload a CSV</Link>
+        <label className="cursor-pointer rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand-dark">
+          Add a file
+          <input type="file" accept=".csv,.xlsx" className="sr-only" aria-label="Add a CSV or Excel file" onChange={add} />
+        </label>
+        <Link to="/upload" className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Clean a file</Link>
       </PageHeader>
       {msg && <p role={msg.ok ? "status" : "alert"} className={`mb-4 text-sm ${msg.ok ? "text-mint-dark" : "text-coral-dark"}`}>{msg.text}</p>}
       {loading && !data ? <Loading /> : error ? <ErrorBox message={error} retry={reload} /> : data && (
@@ -91,7 +109,7 @@ export default function DataSources() {
           <FileList title="Sample files" files={data.samples} emptyTitle="No sample files"
             hint="Fictional data that ships with the project. Built-in workflows read these. They cannot be deleted." />
           <FileList title="Your uploads" files={data.uploads} emptyTitle="No uploads yet" onDelete={remove}
-            hint="Files you uploaded on the Upload CSV page. They are stored on this computer only, under random names." />
+            hint="CSV and Excel files you added here or on the Upload page. They are stored on this computer only, under random names." />
         </>
       )}
     </>

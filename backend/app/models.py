@@ -50,6 +50,8 @@ class Execution(Base):
     workflow: Mapped[Workflow] = relationship(back_populates="executions")
     steps: Mapped[list["ExecutionStep"]] = relationship(
         back_populates="execution", order_by="ExecutionStep.position", cascade="all, delete-orphan")
+    inputs: Mapped[list["ExecutionInput"]] = relationship(
+        back_populates="execution", order_by="ExecutionInput.id", cascade="all, delete-orphan")
 
     def to_dict(self, with_steps: bool = False) -> dict:
         d = {
@@ -58,6 +60,7 @@ class Execution(Base):
             "started_at": iso(self.started_at), "finished_at": iso(self.finished_at),
             "duration_seconds": self.duration_seconds, "error_message": self.error_message,
             "is_demo": self.is_demo,
+            "inputs": [i.to_dict() for i in self.inputs],
         }
         if with_steps:
             d["steps"] = [s.to_dict() for s in self.steps]
@@ -144,3 +147,18 @@ class LoginSession(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     user: Mapped[User] = relationship()
+
+
+class ExecutionInput(Base):
+    """The files a run was told to use. Kept so every result can be traced to its source data.
+    (A separate table, so existing databases keep working without a migration.)"""
+    __tablename__ = "execution_inputs"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    execution_id: Mapped[int] = mapped_column(ForeignKey("executions.id"))
+    name: Mapped[str] = mapped_column(String(40))
+    source: Mapped[str] = mapped_column(String(10))  # samples | uploads
+    file: Mapped[str] = mapped_column(String(100))
+    execution: Mapped[Execution] = relationship(back_populates="inputs")
+
+    def to_dict(self) -> dict:
+        return {"name": self.name, "source": self.source, "file": self.file}

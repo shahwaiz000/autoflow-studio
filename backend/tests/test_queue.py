@@ -24,7 +24,7 @@ def wait_for(client, eid, seconds=10):
 
 def test_background_run_returns_at_once_then_finishes(client):
     r = client.post(f"/api/workflows/{wf_id(client)}/run", params={"background": "true"})
-    assert r.status_code == 202 and r.json()["status"] in ("queued", "running") and r.json()["steps"] == []
+    assert r.status_code == 202 and r.json()["status"] == "queued" and "steps" not in r.json()
     done = wait_for(client, r.json()["id"])
     assert done["status"] == "success" and len(done["steps"]) > 3 and done["trigger_type"] == "manual"
 

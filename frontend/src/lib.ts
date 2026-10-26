@@ -81,10 +81,10 @@ export function formatMinutes(total: number): string {
   return m ? `${h} h ${m} min` : `${h} h`;
 }
 
-export async function uploadCsv<T>(form: FormData): Promise<T> {
+export async function uploadFile<T>(path: string, form: FormData): Promise<T> {
   let res: Response;
   try {
-    res = await fetch("/api/uploads", { method: "POST", body: form });
+    res = await fetch(`/api${path}`, { method: "POST", body: form });
   } catch {
     throw new Error("Cannot reach the backend. Check that it is running on port 8000.");
   }
@@ -93,6 +93,8 @@ export async function uploadCsv<T>(form: FormData): Promise<T> {
   if (!res.ok) throw new Error(body?.error?.message ?? `Upload failed (${res.status})`);
   return body as T;
 }
+
+export const uploadCsv = <T,>(form: FormData) => uploadFile<T>("/uploads", form);
 
 export const inProgress = (status: string) => status === "queued" || status === "running";
 

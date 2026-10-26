@@ -36,7 +36,7 @@ def test_bad_definitions_are_rejected_with_clear_messages(client):
         return b
     assert client.post("/api/workflows", json=with_step(1, type="python_exec")).status_code == 422
     assert client.post("/api/workflows", json=with_step(1, config={"file": "../../etc/passwd.csv"})).status_code == 422
-    assert client.post("/api/workflows", json=with_step(1, config={"file": "a.csv", "source": "uploads"})).status_code == 422
+    assert client.post("/api/workflows", json=with_step(1, config={"file": "a.csv", "source": "elsewhere"})).status_code == 422  # only samples or uploads
     assert client.post("/api/workflows", json=with_step(3, config={"field": "os.system", "op": ">", "value": 1, "on_true": "s5", "on_false": "s6"})).status_code == 422
     r = client.post("/api/workflows", json=with_step(3, config={"field": "invalid_rows", "op": ">", "value": 1, "on_true": "nope", "on_false": "s6"}))
     assert r.status_code == 422 and "unknown step" in r.json()["error"]["message"]

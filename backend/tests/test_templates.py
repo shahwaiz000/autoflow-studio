@@ -17,12 +17,17 @@ def test_using_every_template_creates_a_runnable_workflow(client):
     for t in listed:
         wf = client.post(f"/api/templates/{t['key']}/use")
         assert wf.status_code == 201 and wf.json()["built_in"] is False
-        outcomes[t["key"]] = client.post(f"/api/workflows/{wf.json()['id']}/run").json()
+        files = {i["name"]: {"source": "samples", "file": "messy_payments.csv"} for i in wf.json()["inputs"]}  # slots the template asks for
+        outcomes[t["key"]] = client.post(f"/api/workflows/{wf.json()['id']}/run", json={"inputs": files} if files else None).json()
     assert outcomes["invoice-alert"]["status"] == "success"
     assert "Alert finance team" in [s["name"] for s in outcomes["invoice-alert"]["steps"]]
     assert outcomes["customer-cleanup"]["status"] == "success"
     assert outcomes["sales-summary"]["status"] == "success"
     assert outcomes["new-hire-gate"]["status"] == "success"
+    tidy = outcomes["messy-file-tidy"]
+    assert tidy["status"] == "success" and tidy["inputs"][0]["file"] == "messy_payments.csv"
+    msg = next(s for s in tidy["steps"] if s["step_id"] == "s3")["message"]
+    assert "reformatted" in msg and "could not be read" in msg  # the sample really is messy, and the run says so
     failed = outcomes["strict-gate-retry"]  # this one is meant to fail, after a retry
     assert failed["status"] == "failed" and max(s["attempts"] for s in failed["steps"]) == 2
 

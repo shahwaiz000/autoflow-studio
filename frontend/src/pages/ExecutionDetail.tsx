@@ -43,6 +43,20 @@ export default function ExecutionDetail() {
         </dl>
         {ex.error_message && <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-800">{ex.error_message}</p>}
       </Card>
+      {!!ex.inputs?.length && (
+        <Card title="Files used in this run" className="mb-4">
+          <ul className="space-y-1 text-sm">{ex.inputs.map((i) => <li key={i.name}><span className="font-medium">{i.name}:</span> {i.file} <span className="text-slate-500">({i.source === "samples" ? "sample file" : "your upload"})</span></li>)}</ul>
+        </Card>
+      )}
+      {ex.status === "success" && ex.steps?.some((s) => s.step_type === "report" && s.status === "success") && (
+        <Card title="Download" className="mb-4">
+          <div className="flex flex-wrap gap-2 text-sm">
+            <a className="rounded-lg bg-brand px-3 py-1.5 font-medium text-white hover:bg-brand-dark" href={`/api/executions/${ex.id}/download/report`}>Excel report</a>
+            <a className="rounded-lg border border-slate-300 px-3 py-1.5 hover:bg-slate-50" href={`/api/executions/${ex.id}/download/processed`}>Cleaned data (CSV)</a>
+            <a className="rounded-lg border border-slate-300 px-3 py-1.5 hover:bg-slate-50" href={`/api/executions/${ex.id}/download/summary`}>Column summary (CSV)</a>
+          </div>
+        </Card>
+      )}
       <RunDiagram ex={ex} />
       <Card title="Step log">
         <ol className="space-y-3">

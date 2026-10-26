@@ -59,6 +59,23 @@ def make_samples() -> None:
     })
     sales.to_csv(d / "sales_orders.csv", index=False)
 
+    # A deliberately messy export (fictional): mixed amount formats, mixed date formats, untidy names.
+    r2 = random.Random(11)
+    payers = ["northwind supplies", "BLUE HARBOR LTD", "  Orchid  Logistics ", "Summit Paper Co", "kestrel it"]
+    def amount(i: int) -> str:
+        v = round(r2.uniform(50, 9000), 2)
+        style = i % 6
+        return [f"{v:,.2f}", f"SAR {v:,.2f}", f"{v:,.2f} SAR", str(v), f"({v:,.2f})", "pending"][style]
+    def pay_date(i: int) -> str:
+        day, month = r2.randint(1, 28), r2.randint(8, 10)
+        return [f"{day:02d}/{month:02d}/2026", f"2026-{month:02d}-{day:02d}", f"{day}-{month}-2026", "soon"][i % 4]
+    pd.DataFrame({
+        "payment_id": [f" pay-{2000 + i} " if i % 5 == 0 else f"PAY-{2000 + i}" for i in range(36)],
+        "payer": [r2.choice(payers) for _ in range(36)],
+        "amount": [amount(i) for i in range(36)],
+        "paid_on": [pay_date(i) for i in range(36)],
+    }).to_csv(d / "messy_payments.csv", index=False)
+
 
 WORKFLOWS = [
     dict(name="Invoice Processing", category="Finance",

@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session
 
-from .engine import run_workflow
+from .engine import required_inputs, run_workflow
 from .models import Schedule, Workflow, utcnow
 
 log = logging.getLogger("autoflow.scheduler")
@@ -98,6 +98,8 @@ def run_due(db: Session, now: datetime | None = None) -> list[dict]:
         s.last_run_at = now
         if not wf.enabled:
             s.last_status = "Skipped: the workflow is disabled"
+        elif required_inputs(wf.definition):  # nobody is there to choose the files
+            s.last_status = "Skipped: this workflow needs files chosen when it runs"
         else:
             try:
                 ex = run_workflow(db, wf, "schedule")
