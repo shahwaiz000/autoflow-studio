@@ -57,7 +57,6 @@ export default function ExceptionReview({ executionId }: { executionId: number }
           <option value="">All</option><option value="pending">Still to review ({d.pending})</option>
           <option value="approved">Approved ({d.approved})</option><option value="rejected">Rejected ({d.rejected})</option>
         </select></label>
-        <a className="ml-auto rounded-lg border border-slate-300 px-3 py-1.5 hover:bg-slate-50" href={`/api/executions/${executionId}/download/exceptions`}>Exceptions (CSV)</a>
       </div>
 
       {picked.size > 0 && (

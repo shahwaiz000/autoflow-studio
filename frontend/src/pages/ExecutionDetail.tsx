@@ -52,6 +52,7 @@ export default function ExecutionDetail() {
     const t = window.setInterval(reload, 1000);
     return () => window.clearInterval(t);
   }, [waiting, reload]);
+  const reconciled = !!ex?.result && !!ex.steps?.some((s) => s.step_type === "compare");
   if (loading && !ex) return <Loading />;
   if (error || !ex) return <ErrorBox message={error ?? "Not found"} retry={reload} />;
   return (
@@ -77,12 +78,16 @@ export default function ExecutionDetail() {
         <Card title="Download" className="mb-4">
           <div className="flex flex-wrap gap-2 text-sm">
             <a className="rounded-lg bg-brand px-3 py-1.5 font-medium text-white hover:bg-brand-dark" href={`/api/executions/${ex.id}/download/report`}>Excel report</a>
-            <a className="rounded-lg border border-slate-300 px-3 py-1.5 hover:bg-slate-50" href={`/api/executions/${ex.id}/download/processed`}>Cleaned data (CSV)</a>
-            <a className="rounded-lg border border-slate-300 px-3 py-1.5 hover:bg-slate-50" href={`/api/executions/${ex.id}/download/summary`}>Column summary (CSV)</a>
+            {reconciled ? (
+              (ex.result?.metrics.exceptions ?? 0) > 0 && <a className="rounded-lg border border-slate-300 px-3 py-1.5 hover:bg-slate-50" href={`/api/executions/${ex.id}/download/exceptions`}>Exceptions (CSV)</a>
+            ) : (<>
+              <a className="rounded-lg border border-slate-300 px-3 py-1.5 hover:bg-slate-50" href={`/api/executions/${ex.id}/download/processed`}>Cleaned data (CSV)</a>
+              <a className="rounded-lg border border-slate-300 px-3 py-1.5 hover:bg-slate-50" href={`/api/executions/${ex.id}/download/summary`}>Column summary (CSV)</a>
+            </>)}
           </div>
         </Card>
       )}
-      {ex.result && ex.steps?.some((s) => s.step_type === "compare") && <Reconciliation ex={ex} />}
+      {reconciled && <Reconciliation ex={ex} />}
       <RunDiagram ex={ex} />
       <Card title="Step log">
         <ol className="space-y-3">
