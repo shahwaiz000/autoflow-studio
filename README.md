@@ -108,6 +108,18 @@ frontend/src/
 
 ## Screenshots
 
+**Overview.** The latest reconciliation: match rate, exceptions, amount at risk, what is wrong by type, and exceptions per day.
+
+![Overview](docs/screenshots/overview.png)
+
+**A reconciliation run.** 55 rows matched and 7 exceptions, each with a plain reason. Exceptions can be approved or rejected with a note.
+
+![Reconciliation run](docs/screenshots/reconciliation-run.png)
+
+**Audit trail.** Who decided what, and when. Entries cannot be edited or deleted from the app.
+
+![Audit trail](docs/screenshots/audit-trail.png)
+
 **Execution log.** Every step of a run, with timing and error messages.
 
 ![Execution log](docs/screenshots/execution-log.png)
