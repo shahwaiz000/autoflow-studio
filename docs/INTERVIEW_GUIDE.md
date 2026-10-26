@@ -11,7 +11,7 @@ Written for Shahwaiz. Read it out loud a few times. Every claim below is true of
 1. **The problem.** Finance teams compare two lists by hand every day (what couriers collected against what reached the bank), and differences get missed. The tool finds every difference and explains it, so people only review what is wrong.
 2. **What it does.** A Compare step with exceptions and reasons, Excel and CSV reports, an overview of the latest reconciliation, run history with a flow diagram, schedules, files chosen at run time, a drag-and-drop builder for custom rules, login, a background queue, and a rules-based assistant that builds reconciliation workflows.
 3. **How it is built.** React + TypeScript on the front, FastAPI + SQLAlchemy + SQLite + Pandas on the back. Workflows are stored as JSON data, and the engine only runs a fixed list of step types.
-4. **How I checked it.** 164 backend tests and 76 frontend tests, plus I ran the real server and tried the features end to end.
+4. **How I checked it.** 179 backend tests and 79 frontend tests, plus I ran the real server and tried the features end to end.
 5. **What it is not.** A single-owner local tool. It is not ready for the internet or many users, and I know why (see "Limits").
 
 ## How a run works (draw this on a whiteboard)
@@ -34,6 +34,7 @@ Each step is saved with its time, number of attempts and a message. A failed ste
 - **Uploads are stored under random names**, limited to 5 MB and 50,000 rows, and exported CSV cells are neutralised so Excel does not treat text as a formula.
 - **Login.** Passwords hashed with scrypt, session tokens stored only as hashes, HttpOnly cookie, lockout after 5 wrong tries, requests from unknown websites refused.
 - **Decisions are traceable.** Approving or rejecting an exception records who, when and why in an append-only audit table. Rejecting requires a note, deciding twice changes nothing, and an exception from another run cannot be decided by mistake.
+- **Email alerts are honest and safe.** Real emails go out only when email is set up, and otherwise the run says "not emailed" instead of pretending. The email carries counts and a link, never rows from the files. The password stays in a private .env file. Recipients are capped, placeholder addresses are skipped, and line breaks cannot add extra email headers.
 - **Schedules never pile up.** If the backend was off for three days, a missed run happens once, not 864 times.
 - **Restarts are handled honestly.** Runs left "queued" or "running" by a restart are marked failed with a reason instead of looking busy forever.
 

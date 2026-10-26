@@ -14,7 +14,7 @@ export const TYPES: { value: string; label: string; name: string }[] = [
   { value: "compare", label: "Compare two tables (reconcile)", name: "Match the two files" },
   { value: "condition", label: "Condition (if / else)", name: "Any problems?" },
   { value: "transform", label: "Clean data", name: "Clean data" },
-  { value: "notify", label: "Notification (log only)", name: "Notify team" },
+  { value: "notify", label: "Alert (email or log)", name: "Notify team" },
   { value: "report", label: "Generate report", name: "Generate report" },
   { value: "end", label: "End", name: "Done" },
 ];
@@ -159,7 +159,7 @@ export function Fields({ step, steps, samples, set }: { step: EStep; steps: ESte
       return <div className="space-y-3 text-sm">
         <label className="block">Send to<input className={input} value={c.to} onChange={(e) => upd("to", e.target.value)} /></label>
         <label className="block">Message<input className={input} value={c.message} onChange={(e) => upd("message", e.target.value)} /></label>
-        <p className="text-xs text-slate-500">In this version, notifications are written to the log only. Nothing is sent.</p></div>;
+        <p className="text-xs text-slate-500">Type one or more email addresses separated by commas (up to 5) to send a real email once email is set up under Account. A name like "finance team" is only recorded in the run log. Addresses at example.com are placeholders and are never emailed. The email has counts and a link, never rows from your files.</p></div>;
     case "report":
       return <div className="space-y-3 text-sm"><TablePick c={c} upd={upd} steps={steps} />
         <p className="text-xs text-slate-500">Writes a column summary, the cleaned data and an Excel workbook you can download from the run.</p></div>;

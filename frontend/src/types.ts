@@ -83,3 +83,5 @@ export interface ExceptionList { total: number; by_kind: Record<string, number>;
 export interface RunResult { metrics: Record<string, number>; details: Record<string, unknown> }
 export interface AuditEvent { id: number; at: string; actor: string; action: string; execution_id: number | null; exception_id: number | null; key: string; detail: string }
 export interface AuditList { total: number; items: AuditEvent[] }
+
+export interface EmailStatus { configured: boolean; host: string | null; port: number; sender: string | null; security: string; allowed_domains: string[] }

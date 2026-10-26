@@ -11,7 +11,7 @@ from pathlib import Path
 import pandas as pd
 from sqlalchemy.orm import Session
 
-from . import reconcile, tables
+from . import emailer, reconcile, tables
 from .config import settings
 from .models import Execution, ExecutionException, ExecutionInput, ExecutionResult, ExecutionStep, Workflow, utcnow
 
@@ -40,6 +40,7 @@ class Context:
         self.metrics: dict = {"invalid_rows": 0, "missing_values": 0}
         self.details: dict = {}
         self.execution_id: int | None = None
+        self.workflow_name: str = ""
 
 
 def h_trigger(cfg, ctx):
@@ -210,9 +211,44 @@ def h_compare(cfg, ctx):
     return reconcile.summary_line(metrics, cfg["left"], cfg["right"])
 
 
+def _alert_text(cfg, ctx) -> tuple[str, str]:
+    """Subject and body of an alert email: counts and amounts only, never rows from the files."""
+    name, note = ctx.workflow_name or "Workflow", " ".join(str(cfg.get("message", "")).split())
+    comps = ctx.details.get("comparisons") or []
+    lines = [note] if note else []
+    if comps:
+        m, c = ctx.metrics, comps[0]
+        at_risk = round(float(m.get("amount_difference") or 0) + float(m.get("unmatched_amount") or 0), 2)
+        lines += [reconcile.summary_line(m, c["left"], c["right"]), f"Amount at risk: {at_risk:,.2f}"]
+        subject = f"[AutoFlow Studio] {name}: {m.get('exceptions', 0)} exceptions to review" if m.get("exceptions") else f"[AutoFlow Studio] {name}: everything matched"
+    else:
+        subject = f"[AutoFlow Studio] {name}: {note[:80] or 'alert'}"
+    lines += ["", f"Run #{ctx.execution_id}: {settings.app_url.rstrip('/')}/executions/{ctx.execution_id}",
+              "", "Sent by AutoFlow Studio. The details are on the run page; no file contents are included in this email."]
+    return subject, "\n".join(lines)
+
+
 def h_notify(cfg, ctx):
-    # v0.1: notifications are recorded in the log only (nothing is sent externally).
-    return f"Notification recorded for {cfg.get('to', 'team')}: {cfg.get('message', '')}"
+    """Send a real email when the recipient is an email address and email is set up. Otherwise record it in the log, and say so."""
+    to_text, message = str(cfg.get("to", "team")), cfg.get("message", "")
+    recipients, names = emailer.split_recipients(to_text)
+    logged = f"Notification recorded for {to_text}: {message}"
+    if not recipients:
+        return logged + " (not emailed: the recipient is a name, not an email address)"
+    real = [r for r in recipients if not emailer.is_placeholder(r)]
+    if not real:
+        return logged + f" (not emailed: {', '.join(recipients)} is a placeholder address. Change it to a real one)"
+    if not emailer.configured():
+        return logged + " (not emailed: email is not set up. See Account, Email alerts)"
+    if len(real) > emailer.MAX_RECIPIENTS:
+        raise StepError(f"An alert goes to at most {emailer.MAX_RECIPIENTS} addresses")
+    subject, body = _alert_text(cfg, ctx)
+    try:
+        emailer.send(real, subject, body)
+    except emailer.EmailError as err:
+        raise StepError(str(err))
+    skipped = [r for r in recipients if r not in real]
+    return f"Email sent to {', '.join(real)}: {subject}" + (f". Not sent to placeholder {', '.join(skipped)}" if skipped else "")
 
 
 def profile(df: pd.DataFrame) -> pd.DataFrame:
@@ -350,6 +386,7 @@ def execute(db: Session, ex: Execution, definition: dict | None = None) -> Execu
     defn = definition or workflow.definition
     ctx = Context()
     ctx.execution_id = ex.id
+    ctx.workflow_name = ex.workflow.name
     ctx.inputs = {i.name: {"source": i.source, "file": i.file} for i in ex.inputs}
     t0 = time.perf_counter()
     try:

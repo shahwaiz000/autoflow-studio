@@ -25,7 +25,7 @@ def test_info_is_honest_about_not_being_an_ai_model(client):
     d = client.get("/api/assistant/info").json()
     assert d["provider"] == "rules" and d["uses_ai_model"] is False
     assert {x["file"] for x in d["datasets"]} == {"courier_collections.csv", "bank_deposits.csv"}
-    assert any("Nothing is emailed" in x for x in d["limits"])
+    assert any("emailed only if email is set up" in x for x in d["limits"])
     assert all(x["columns"] for x in d["datasets"])  # read from the real sample files
 
 

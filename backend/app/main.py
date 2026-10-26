@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from . import analytics, assistant, auth, datasources, reconcile, review, runqueue, schedules, tables
+from . import analytics, assistant, auth, datasources, emailer, reconcile, review, runqueue, schedules, tables
 from .config import settings
 from .database import Base, SessionLocal, engine, get_db
 from .engine import required_inputs, run_workflow
@@ -296,6 +296,35 @@ def decide_exceptions(eid: int, body: DecideIn, request: Request, db: Session = 
     except ValueError as e:
         raise HTTPException(422, str(e))
     return {"changed": changed, "by_decision": review.counts(db, eid)}
+
+
+@app.get("/api/email/status")
+def email_status():
+    """Whether alert emails can be sent. Never includes the password."""
+    return emailer.status()
+
+
+class TestEmailIn(BaseModel):
+    to: str = Field(min_length=3, max_length=120)
+
+
+@app.post("/api/email/test")
+def email_test(body: TestEmailIn):
+    """Send one test email, so the person knows the settings work before relying on an alert."""
+    to, _ = emailer.split_recipients(body.to)
+    if len(to) != 1:
+        raise HTTPException(422, "Type exactly one email address")
+    if emailer.is_placeholder(to[0]):
+        raise HTTPException(422, f"{to[0]} is a placeholder address. Use a real one")
+    if not emailer.configured():
+        raise HTTPException(409, "Email is not set up yet. Add the SMTP settings to the .env file and restart the backend")
+    if not emailer.allow_test():
+        raise HTTPException(429, "Too many test emails. Wait a minute")
+    try:
+        emailer.send(to, "[AutoFlow Studio] Test email", "This is a test from AutoFlow Studio. If you can read this, alert emails will work.")
+    except emailer.EmailError as e:
+        raise HTTPException(502, str(e))
+    return {"sent_to": to[0]}
 
 
 @app.get("/api/audit")

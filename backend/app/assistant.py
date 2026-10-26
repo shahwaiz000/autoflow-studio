@@ -32,7 +32,7 @@ PAIR = dict(left=DATASETS[0], right=DATASETS[1], left_key="waybill", right_key="
 LIMITS = [
     "It follows rules and keywords. It is not an AI language model and does not understand every sentence.",
     "It builds one kind of workflow: courier collections reconciled against bank deposits, using the sample files. For your own files use the COD Reconciliation template.",
-    "Notifications are recorded in the run log only. Nothing is emailed or sent.",
+    "Alerts are emailed only if email is set up (Account, Email alerts) and the recipient is a real address. Otherwise they are recorded in the run log and the run says so.",
     "The assistant does not set schedules. Save the workflow, then add a schedule on the Schedules page.",
 ]
 
@@ -100,7 +100,7 @@ def _propose_reconcile(db: Session, request: str, text: str, base: dict) -> dict
         blocks += [("condition", "Any exceptions?", {"field": "exceptions", "op": ">", "value": 0},
                     "You want an alert only when something does not match, so this step checks if there are any exceptions."),
                    ("notify", f"Alert {recipient.split('@')[0]}", {"to": recipient, "message": "Collections and deposits do not fully match"},
-                    f"Sends the alert to {recipient} (recorded in the run log; nothing is emailed).")]
+                    f"Sends the alert to {recipient} (emailed if email is set up; otherwise recorded in the run log).")]
     blocks += [("report", "Excel report", {"table": "courier"}, "Writes an Excel workbook that includes an Exceptions sheet."),
                ("end", "Done", {}, "Marks the end of the workflow.")]
     ids = [f"s{i}" for i in range(1, len(blocks) + 1)]
@@ -187,7 +187,7 @@ def _describe(step: dict, names: dict) -> str:
         ops = [TRANSFORM_WORDS.get(o, o) for o in c.get("operations", [])]
         return ("Cleans the data: " + ", ".join(ops) + ".") if ops else "Does not change the data (no cleaning options chosen)."
     if t == "notify":
-        return f"Records a notification for {c.get('to') or 'the team'}: \"{c.get('message', '')}\". Nothing is actually sent."
+        return f"Alerts {c.get('to') or 'the team'}: \"{c.get('message', '')}\". Sends a real email if the recipient is an email address and email is set up; otherwise it is only recorded in the run log."
     if t == "report":
         return "Writes a summary report and the processed data as downloadable files."
     return "Marks the end of the workflow."
@@ -221,7 +221,7 @@ def explain(db: Session, wf: Workflow) -> dict:
     if "end" not in types:
         ideas.append("Add an End step so the final point of the workflow is clear.")
     if "notify" in types:
-        ideas.append("Notifications are only recorded in the run log. Nothing is emailed yet.")
+        ideas.append("Alerts are emailed only when email is set up under Account and the recipient is a real address (not a name or an example.com address). Otherwise they are only recorded in the run log.")
     if not wf.enabled:
         ideas.append("This workflow is disabled. Enable it on the Workflows page before you run it.")
 

@@ -20,7 +20,7 @@ Finance and operations teams spend hours every day checking one list against ano
 - **Overview page.** The latest reconciliation (match rate, exceptions, amount at risk), what is wrong by type, exceptions per day, and recent runs. Every number comes from stored results.
 - **Run history.** Every run, which files it used, a step-by-step log and a flow diagram showing the path it took.
 - **Schedules.** Run a reconciliation every few minutes, daily or weekly. Only while the backend is running, and workflows that need you to choose files are skipped and say why.
-- **Alert step.** "Alert finance if there are exceptions". Alerts are written to the run log. Nothing is emailed yet.
+- **Email alerts.** "Alert finance if there are exceptions" can send a real email through your own email account (SMTP, for example Gmail with an app password). The email has the counts, the amount at risk and a link to the run, never rows from your files. Up to 5 recipients, an optional list of allowed domains, and placeholder addresses (example.com) are never emailed. A "Send test email" button on the Account page checks the settings. If email is not set up, the alert is only recorded in the run log and the run says so. The password lives in `backend/.env` only: not in the database, not on screen, not on GitHub.
 
 **Around it**
 
@@ -29,11 +29,11 @@ Finance and operations teams spend hours every day checking one list against ano
 - **Template and visual builder.** Start from the COD Reconciliation template, or draw your own with drag and drop. A drawing is checked before saving. Only a fixed list of step types can run, so no user-written code is executed.
 - **Assistant (rules-based, not an AI model).** Describe a reconciliation in plain English and get a proposed workflow with the reason for each step. It can also explain a workflow and summarise why runs failed. It is free and works offline.
 - **Login.** One owner account, scrypt password hashing, HttpOnly session cookie, lockout after five wrong passwords, origin check on changes.
-- **Tests.** 164 backend tests (pytest) and 76 frontend tests (Vitest).
+- **Tests.** 179 backend tests (pytest) and 79 frontend tests (Vitest).
 
 ## Not built yet
 
-A workflow step that pauses a run until someone approves it (review happens after the run, on its page), many-to-one matching (one deposit covering many parcels), anomaly flags, emailed notifications, folder watching, multiple users and roles, a language-model assistant. The old .xls format is not supported.
+A workflow step that pauses a run until someone approves it (review happens after the run, on its page), many-to-one matching (one deposit covering many parcels), anomaly flags, folder watching, text-message or chat alerts, multiple users and roles, a language-model assistant. The old .xls format is not supported.
 
 ## Sample data
 
@@ -83,6 +83,7 @@ backend/app/
   models.py       Workflow, Execution, ExecutionStep, ExecutionInput tables
   tables.py       reading CSV and Excel files, and cleaning amounts, dates and text
   review.py       approving and rejecting exceptions, with audit entries
+  emailer.py      sends alert emails through SMTP, with safety checks
   seed.py         the COD sample files and built-in workflow (safe to run many times)
   templates.py    ready-made workflow templates
   reconcile.py    the matching logic behind the Compare step
@@ -103,6 +104,7 @@ frontend/src/
 
 - The background queue lives in memory and has one worker. For many users or very long jobs, use a real job system (for example Celery or RQ with Redis).
 - The audit trail is tamper-resistant inside the app, not against someone who edits the database file directly. Use a real database with restricted permissions for that.
+- Alert emails go out one at a time while the run is in progress. If the mail server is down, the run fails with a clear message (use the step's retries for short outages) and there is no retry queue.
 - Login is for one owner only. Do not put this on the internet without HTTPS.
 - The database has no migration tool yet. Add one (Alembic) before changing tables on real data.
 

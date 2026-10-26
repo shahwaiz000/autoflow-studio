@@ -24,7 +24,7 @@ TEMPLATES = [
     dict(key="cod-reconciliation", name="COD Reconciliation", category="Finance",
          description="Choose a courier collections file and a bank deposits file when you run it. Every waybill is matched to its bank reference and the amounts are compared. Anything that does not agree is listed as an exception with a reason.",
          tags=["Reconciliation", "Choose files at run time", "Exceptions", "Excel report"],
-         note="Pick courier_collections.csv and bank_deposits.csv (fictional samples with planted differences) or your own files. Columns needed: waybill and cod_amount; reference and amount.",
+         note="Pick courier_collections.csv and bank_deposits.csv (fictional samples with planted differences) or your own files. Columns needed: waybill and cod_amount; reference and amount. The alert goes to finance@example.com, a placeholder that is never emailed: open the workflow in the Builder and change it to a real address to get emails.",
          steps=[_s("s1", "trigger", "Start"),
                 _s("s2", "load_csv", "Courier collections", input="courier", table="courier"),
                 _s("s3", "load_csv", "Bank deposits", input="bank", table="bank"),

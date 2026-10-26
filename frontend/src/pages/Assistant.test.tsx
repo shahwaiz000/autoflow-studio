@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import Assistant from "./Assistant";
 
-const info = { provider: "rules", uses_ai_model: false, limits: ["Notifications are recorded in the run log only. Nothing is emailed or sent."],
+const info = { provider: "rules", uses_ai_model: false, limits: ["Alerts are emailed only if email is set up."],
   datasets: [{ label: "Invoices", file: "invoices.csv", columns: ["invoice_id"] }] };
 const proposal = {
   status: "ok", request: "x", name: "Invoices check and alert", description: "Built by the assistant", category: "Finance",
