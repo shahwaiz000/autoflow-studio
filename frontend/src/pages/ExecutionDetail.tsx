@@ -85,7 +85,6 @@ export default function ExecutionDetail() {
       <Link to="/executions" className="mb-3 inline-block text-sm text-brand-dark hover:underline">Back to executions</Link>
       <PageHeader title={`Execution #${ex.id}`} subtitle={ex.workflow_name}><StatusBadge status={ex.status} /></PageHeader>
       {waiting && <p role="status" className="mb-4 rounded-lg bg-sun-soft px-4 py-2 text-sm text-sun-dark">{ex.status === "queued" ? "This run is waiting in the queue." : "This run is in progress."} The page updates by itself.</p>}
-      {ex.is_demo && <p className="mb-4 rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-600">This is a seeded demo execution (fictional). Its step log is illustrative.</p>}
       <Card className="mb-4">
         <dl className="grid gap-4 text-sm sm:grid-cols-4">
           <div><dt className="text-slate-500">Started</dt><dd className="font-medium">{formatDate(ex.started_at)}</dd></div>

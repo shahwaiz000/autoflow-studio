@@ -152,7 +152,9 @@ def test_the_exceptions_csv_download_is_safe_for_excel(client, run_ctx):
     assert r.status_code == 200 and "text/csv" in r.headers["content-type"]
     df = pd.read_csv(io.StringIO(r.text))
     assert len(df) == 4 and {"type", "key", "reason", "decision"} <= set(df.columns)
-    assert client.get("/api/executions/1/download/exceptions").status_code == 404  # a run with no exceptions
+    plain = next(w for w in client.get("/api/workflows").json() if w["name"] == "Sales Report Generation")
+    other = client.post(f"/api/workflows/{plain['id']}/run").json()
+    assert client.get(f"/api/executions/{other['id']}/download/exceptions").status_code == 404  # a run with no exceptions
 
 
 def test_the_excel_report_has_an_exceptions_sheet(client, run_ctx):

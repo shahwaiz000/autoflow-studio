@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
-import { EStep, Fields } from "./WorkflowEditor";
+import { EStep, Fields } from "../components/StepFields";
 
 const catalog = {
   samples: [{ name: "invoices.csv", source: "samples", readable: true, rows: 40, columns: [], size_bytes: 1, modified_at: null, used_by: [], sheets: [] }],

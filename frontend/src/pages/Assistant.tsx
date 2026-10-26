@@ -7,10 +7,9 @@ import { api, useApi } from "../lib";
 import type { AssistantInfo, Execution, Explanation, FailureInsights, Proposal, Workflow } from "../types";
 
 const EXAMPLES = [
-  "Check invoices and alert finance if any are incomplete",
-  "Stop the run if any new hire record is incomplete",
-  "Clean the customer list: remove duplicates and extra spaces",
-  "Summarize the sales orders and check that revenue is numeric",
+  "Reconcile courier collections with bank deposits and alert finance if anything does not match",
+  "Compare courier cod collections against bank deposits, allowing a difference of 5",
+  "Match the courier collections to the bank deposits and tell ops@example.com about any exceptions",
 ];
 const field = "mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm";
 const primary = "inline-flex items-center gap-2 rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-50";
@@ -54,7 +53,7 @@ function Build() {
       <Card title="Describe what you want">
         <label htmlFor="ask" className="sr-only">Describe the workflow you want</label>
         <textarea id="ask" value={text} onChange={(e) => setText(e.target.value)} maxLength={500} rows={3}
-          placeholder="For example: Check invoices and alert finance if any are incomplete" className={field} />
+          placeholder="For example: Reconcile courier collections with bank deposits and alert finance if anything does not match" className={field} />
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <button onClick={suggest} disabled={busy || text.trim().length < 3} className={primary}>
             <Icon name="sparkles" className="h-4 w-4" /> {busy ? "Thinking..." : "Suggest a workflow"}
@@ -171,18 +170,14 @@ function Explain() {
 /* ---------- Tab 3: failure insights ---------- */
 
 function Failures() {
-  const [source, setSource] = useState("all");
   const [days, setDays] = useState(14);
-  const { data, error, loading, reload } = useApi<FailureInsights>(`/assistant/failures?days=${days}&source=${source}`);
+  const { data, error, loading, reload } = useApi<FailureInsights>(`/assistant/failures?days=${days}`);
   return (
     <div className="space-y-4">
       <Card title="Why are runs failing?" action={
         <div className="flex gap-2">
           <select aria-label="Time range" value={days} onChange={(e) => setDays(Number(e.target.value))} className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
             <option value={7}>Last 7 days</option><option value={14}>Last 14 days</option><option value={30}>Last 30 days</option>
-          </select>
-          <select aria-label="Which runs" value={source} onChange={(e) => setSource(e.target.value)} className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
-            <option value="all">All runs</option><option value="live">My runs</option><option value="demo">Demo runs</option>
           </select>
         </div>}>
         {loading && !data ? <Loading /> : error || !data ? <ErrorBox message={error ?? "No data"} retry={reload} /> : (

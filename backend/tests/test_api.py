@@ -2,12 +2,11 @@ def test_health(client):
     assert client.get("/api/health").json()["status"] == "ok"
 
 
-def test_dashboard_values_are_consistent(client):
+def test_dashboard_has_reconciliation_totals(client):
     d = client.get("/api/dashboard").json()
-    t = d["totals"]
-    assert t["successful"] + t["failed"] + t["running"] == t["executions"]
-    assert d["data_source"]["demo_executions"] > 0
-    assert len(d["trend"]) == 14
+    assert set(d) >= {"totals", "latest", "trend", "exceptions_by_kind", "recent", "last_failure"}
+    assert d["totals"]["reconciliations"] <= d["totals"]["runs"]
+    assert len(d["trend"]) == 30
 
 
 def test_run_workflow_persists_execution(client):

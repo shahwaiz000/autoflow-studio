@@ -140,12 +140,6 @@ def test_bad_uploads_are_refused_and_leave_no_file_behind(client, name, data, me
     assert after == before
 
 
-def test_the_cleaner_upload_page_accepts_excel_too(client):
-    data = xlsx_bytes({"S": [["name", "amount"], ["a", 1], ["a", 1], ["b", 2]]})
-    r = client.post("/api/uploads", files={"file": ("sheet.xlsx", io.BytesIO(data), "x")})
-    assert r.status_code == 201 and r.json()["status"] == "success"
-
-
 # ---------- several tables in one workflow
 
 def two_tables(extra_steps=()):

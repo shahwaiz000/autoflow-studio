@@ -18,31 +18,16 @@ export interface Workflow {
   definition?: { steps: { id: string; type: string; name: string; retries?: number; next?: string; pos?: { x: number; y: number }; config: Record<string, any> }[] };
 }
 export interface Dashboard {
-  totals: {
-    workflows: number; enabled_workflows: number; executions: number; successful: number;
-    failed: number; running: number; success_rate: number | null; avg_duration_seconds: number | null;
-  };
-  data_source: { demo_executions: number; live_executions: number };
-  trend: { date: string; success: number; failed: number }[];
+  days: number;
+  totals: { reconciliations: number; runs: number; failed: number; running: number; workflows: number };
+  latest: {
+    execution_id: number; workflow: string; started_at: string; left: string | null; right: string | null; rows: number;
+    matched_rows: number; exceptions: number; match_rate: number | null; amount_at_risk: number; by_kind: Record<string, number>;
+  } | null;
+  trend: { date: string; runs: number; matched: number; exceptions: number }[];
+  exceptions_by_kind: Record<string, number>;
   recent: Execution[];
-  workflow_performance: { workflow: string; runs: number; failed: number; avg_duration_seconds: number }[];
-  failure_reasons: { reason: string; count: number }[];
-}
-
-export interface UploadResult extends Execution {
-  metrics: {
-    rows_loaded?: number; rows_after_cleaning?: number; invalid_rows?: number; duplicate_rows?: number;
-    invalid_values?: number; missing_values?: number; missing_by_column?: Record<string, number>;
-  };
-}
-
-export interface Analytics {
-  days: number; source: string;
-  totals: { executions: number; successful: number; failed: number; success_rate: number | null; avg_duration_seconds: number | null };
-  daily: { date: string; success: number; failed: number; avg_duration_seconds: number | null }[];
-  workflows: { workflow: string; runs: number; failed: number; success_rate: number; avg_duration_seconds: number }[];
-  failure_reasons: { reason: string; count: number }[];
-  triggers: { trigger: string; count: number }[];
+  last_failure: { execution_id: number; workflow: string; reason: string | null } | null;
 }
 
 export interface Template {

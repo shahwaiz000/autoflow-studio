@@ -4,7 +4,7 @@ from app.templates import TEMPLATES
 
 def test_every_template_passes_the_same_checks_as_the_editor():
     keys = [t["key"] for t in TEMPLATES]
-    assert len(keys) == len(set(keys)) >= 5
+    assert len(keys) == len(set(keys)) == 2
     for t in TEMPLATES:
         definition, errors = clean_definition(t["steps"])
         assert errors == [], (t["key"], errors)
@@ -20,11 +20,6 @@ def test_using_every_template_creates_a_runnable_workflow(client):
         pick = {"courier": "courier_collections.csv", "bank": "bank_deposits.csv", "payments": "messy_payments.csv"}
         files = {i["name"]: {"source": "samples", "file": pick[i["name"]]} for i in wf.json()["inputs"]}  # slots the template asks for
         outcomes[t["key"]] = client.post(f"/api/workflows/{wf.json()['id']}/run", json={"inputs": files} if files else None).json()
-    assert outcomes["invoice-alert"]["status"] == "success"
-    assert "Alert finance team" in [s["name"] for s in outcomes["invoice-alert"]["steps"]]
-    assert outcomes["customer-cleanup"]["status"] == "success"
-    assert outcomes["sales-summary"]["status"] == "success"
-    assert outcomes["new-hire-gate"]["status"] == "success"
     tidy = outcomes["messy-file-tidy"]
     assert tidy["status"] == "success" and tidy["inputs"][0]["file"] == "messy_payments.csv"
     msg = next(s for s in tidy["steps"] if s["step_id"] == "s3")["message"]
@@ -33,13 +28,11 @@ def test_using_every_template_creates_a_runnable_workflow(client):
     assert cod["status"] == "success"
     assert "Alert finance team" in [s["name"] for s in cod["steps"]]
     assert cod["result"]["metrics"]["matched_rows"] == 55 and cod["result"]["metrics"]["exceptions"] == 7
-    failed = outcomes["strict-gate-retry"]  # this one is meant to fail, after a retry
-    assert failed["status"] == "failed" and max(s["attempts"] for s in failed["steps"]) == 2
 
 
 def test_using_a_template_twice_gives_unique_names(client):
-    a = client.post("/api/templates/sales-summary/use").json()["name"]
-    b = client.post("/api/templates/sales-summary/use").json()["name"]
+    a = client.post("/api/templates/cod-reconciliation/use").json()["name"]
+    b = client.post("/api/templates/cod-reconciliation/use").json()["name"]
     assert a != b and "copy" in b
 
 

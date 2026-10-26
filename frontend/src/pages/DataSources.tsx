@@ -96,20 +96,19 @@ export default function DataSources() {
 
   return (
     <>
-      <PageHeader title="Data Sources" subtitle="The CSV files your workflows can read. Look inside a file before you use it.">
+      <PageHeader title="Data Sources" subtitle="Your courier, bank and other files. Look inside a file before you reconcile it. You can also pick or add a file on the spot when you run a workflow.">
         <label className="cursor-pointer rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand-dark">
           Add a file
           <input type="file" accept=".csv,.xlsx" className="sr-only" aria-label="Add a CSV or Excel file" onChange={add} />
         </label>
-        <Link to="/upload" className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Clean a file</Link>
       </PageHeader>
       {msg && <p role={msg.ok ? "status" : "alert"} className={`mb-4 text-sm ${msg.ok ? "text-mint-dark" : "text-coral-dark"}`}>{msg.text}</p>}
       {loading && !data ? <Loading /> : error ? <ErrorBox message={error} retry={reload} /> : data && (
         <>
           <FileList title="Sample files" files={data.samples} emptyTitle="No sample files"
-            hint="Fictional data that ships with the project. Built-in workflows read these. They cannot be deleted." />
+            hint="Fictional courier and bank files with planted differences, so you can see a reconciliation work. They cannot be deleted." />
           <FileList title="Your uploads" files={data.uploads} emptyTitle="No uploads yet" onDelete={remove}
-            hint="CSV and Excel files you added here or on the Upload page. They are stored on this computer only, under random names." />
+            hint="CSV and Excel files you added. They are stored on this computer only, under random names." />
         </>
       )}
     </>

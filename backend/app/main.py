@@ -1,11 +1,9 @@
 import csv
 import io
 import logging
-import uuid
-from pathlib import Path
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
@@ -19,7 +17,7 @@ from .database import Base, SessionLocal, engine, get_db
 from .engine import required_inputs, run_workflow
 from .models import Execution, ExecutionException, Schedule, User, Workflow, iso, utcnow
 from .definitions import clean_definition
-from .seed import WORKFLOWS, seed
+from .seed import seed
 from .templates import TEMPLATES
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -99,7 +97,7 @@ class WorkflowPatch(BaseModel):
     enabled: bool
 
 
-BUILT_IN = {w["name"] for w in WORKFLOWS}
+BUILT_IN = {"COD Reconciliation"}  # the one workflow every installation starts with
 
 
 class WorkflowIn(BaseModel):
@@ -236,58 +234,8 @@ def get_execution(eid: int, db: Session = Depends(get_db)):
     return ex.to_dict(with_steps=True)
 
 
-MAX_UPLOAD_BYTES = 5_000_000
-UPLOAD_WORKFLOW = "CSV Upload Cleaner"
 DOWNLOADS = {"processed": "processed.csv", "summary": "summary.csv", "report": "report.xlsx"}
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-
-
-def _split(text: str) -> list[str]:
-    return [p.strip() for p in text.split(",") if p.strip()]
-
-
-@app.post("/api/uploads", status_code=201)
-async def upload_csv(file: UploadFile = File(...), required_columns: str = Form(""),
-                     numeric_columns: str = Form(""), missing_values: str = Form("remove"),
-                     invalid_numbers: str = Form("keep"),
-                     db: Session = Depends(get_db)):
-    original = Path(file.filename or "upload.csv").name[:100]
-    ext = Path(original).suffix.lower()
-    if ext not in tables.EXTS:
-        raise HTTPException(400, "Only .csv and .xlsx files are supported")
-    if missing_values not in ("remove", "keep"):
-        raise HTTPException(400, "missing_values must be 'remove' or 'keep'")
-    if invalid_numbers not in ("remove", "keep"):
-        raise HTTPException(400, "invalid_numbers must be 'remove' or 'keep'")
-    data = await file.read(MAX_UPLOAD_BYTES + 1)
-    if len(data) > MAX_UPLOAD_BYTES:
-        raise HTTPException(413, f"The file is larger than the {MAX_UPLOAD_BYTES // 1_000_000} MB limit")
-    if not data.strip():
-        raise HTTPException(400, "The file is empty")
-    wf = db.query(Workflow).filter_by(name=UPLOAD_WORKFLOW).first()
-    if not wf:
-        raise HTTPException(500, "The upload workflow is missing. Restart the backend to re-create it")
-    settings.uploads_dir.mkdir(parents=True, exist_ok=True)
-    stored = f"{uuid.uuid4().hex}{ext}"  # random name: the original name is never used on disk
-    (settings.uploads_dir / stored).write_bytes(data)
-    numeric = _split(numeric_columns)
-    ops = ["trim_text", "drop_duplicates"]
-    if invalid_numbers == "remove" and numeric:
-        ops.append("drop_invalid_numbers")
-    if missing_values == "remove":
-        ops.append("drop_missing")
-    definition = {"steps": [
-        {"id": "t", "type": "trigger", "name": f"File received: {original}", "config": {"kind": "upload"}},
-        {"id": "load", "type": "load_csv", "name": "Load CSV file", "config": {"file": stored, "source": "uploads"}},
-        {"id": "val", "type": "validate", "name": "Check columns, missing values and duplicates",
-         "config": {"required_columns": _split(required_columns), "numeric_columns": numeric}},
-        {"id": "tr", "type": "transform", "name": "Clean data", "config": {"operations": ops, "numeric_columns": numeric}},
-        {"id": "report", "type": "report", "name": "Generate report", "config": {}},
-        {"id": "end", "type": "end", "name": "Done", "config": {}},
-    ]}
-    ex = run_workflow(db, wf, "upload", definition=definition)
-    datasources.remember_upload(db, stored, original, ex.id)
-    return {**ex.to_dict(with_steps=True), "metrics": getattr(ex, "result_metrics", {})}
 
 
 def _exceptions_csv(db: Session, eid: int) -> Response:
@@ -334,19 +282,6 @@ def download(eid: int, kind: str, db: Session = Depends(get_db)):
 
 
 SOURCE = "^(all|live|demo)$"
-
-
-@app.get("/api/analytics")
-def get_analytics(days: int = Query(14, ge=1, le=365), source: str = Query("all", pattern=SOURCE),
-                  db: Session = Depends(get_db)):
-    return analytics.report(db, days, source)
-
-
-@app.get("/api/analytics/export")
-def export_analytics(days: int = Query(14, ge=1, le=365), source: str = Query("all", pattern=SOURCE),
-                     db: Session = Depends(get_db)):
-    return Response(analytics.export_csv(db, days, source), media_type="text/csv",
-                    headers={"Content-Disposition": 'attachment; filename="autoflow_executions.csv"'})
 
 
 @app.get("/api/samples")

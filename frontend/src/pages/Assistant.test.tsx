@@ -58,8 +58,8 @@ it("says plainly that it is rules-based and not an AI model", async () => {
 
 it("shows a proposal with reasons and warnings, and fills examples on click", async () => {
   open();
-  fireEvent.click(screen.getByRole("button", { name: /Clean the customer list/ }));
-  expect(screen.getByLabelText("Describe the workflow you want")).toHaveValue("Clean the customer list: remove duplicates and extra spaces");
+  fireEvent.click(screen.getByRole("button", { name: /allowing a difference of 5/ }));
+  expect(screen.getByLabelText("Describe the workflow you want")).toHaveValue("Compare courier cod collections against bank deposits, allowing a difference of 5");
   fireEvent.click(screen.getByRole("button", { name: /Suggest a workflow/ }));
   expect(await screen.findByDisplayValue("Invoices check and alert")).toBeInTheDocument();
   expect(screen.getByText("Every workflow needs a start.")).toBeInTheDocument();

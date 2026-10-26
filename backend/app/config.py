@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     auth_cookie_secure: bool = False  # set true when served over https
     session_days: int = 7
     scheduler_tick_seconds: int = 20
+    remove_legacy_demo: bool = True  # tidy away demo data that older versions created (tests switch it off)
 
     @property
     def samples_dir(self) -> Path:

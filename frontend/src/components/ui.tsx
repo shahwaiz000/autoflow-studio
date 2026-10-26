@@ -59,11 +59,3 @@ export const Empty = ({ title, hint }: { title: string; hint: string }) => (
     <p className="mt-1 text-sm text-slate-500">{hint}</p>
   </div>
 );
-
-export const DemoNote = ({ demo, live }: { demo: number; live: number }) =>
-  demo > 0 ? (
-    <p className="mb-5 flex items-start gap-2.5 rounded-xl border border-brand/15 bg-brand-soft px-4 py-2.5 text-sm text-brand-dark">
-      <span className="mt-0.5 shrink-0 rounded-md bg-brand px-1.5 py-0.5 text-xs font-semibold text-white">Demo data</span>
-      <span>Includes {demo} seeded demo executions (fictional) alongside {live} you ran yourself. Demo runs are labeled in the execution list.</span>
-    </p>
-  ) : null;

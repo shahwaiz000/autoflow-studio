@@ -27,7 +27,7 @@ export default function Executions() {
                 {data.map((e) => (
                   <tr key={e.id} className="border-t border-slate-100">
                     <td className="py-2.5 text-slate-500">#{e.id}</td>
-                    <td className="font-medium">{e.workflow_name}{e.is_demo && <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-xs font-normal text-slate-500">demo</span>}</td>
+                    <td className="font-medium">{e.workflow_name}</td>
                     <td><StatusBadge status={e.status} /></td><td>{e.trigger_type}</td><td>{formatDate(e.started_at)}</td><td>{formatDuration(e.duration_seconds)}</td>
                     <td><Link className="text-brand-dark hover:underline" to={`/executions/${e.id}`}>Details</Link></td>
                   </tr>

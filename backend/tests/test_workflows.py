@@ -48,7 +48,7 @@ def test_update_and_protect_built_in_workflows(client):
     wid = client.post("/api/workflows", json=_body(name="To Edit")).json()["id"]
     r = client.put(f"/api/workflows/{wid}", json=_body(name="Edited", description="new"))
     assert r.status_code == 200 and r.json()["name"] == "Edited"
-    built = client.get("/api/workflows", params={"search": "Employee Onboarding"}).json()[0]
+    built = client.get("/api/workflows", params={"search": "COD Reconciliation"}).json()[0]
     assert built["built_in"] is True
     full = client.get(f"/api/workflows/{built['id']}").json()
     renamed = {"name": "Other name", "steps": full["definition"]["steps"]}

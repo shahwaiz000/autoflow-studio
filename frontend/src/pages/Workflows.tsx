@@ -56,9 +56,10 @@ export default function Workflows() {
 
   return (
     <>
-      <PageHeader title="Workflows" subtitle="Run a workflow to execute it on the backend and record the result.">
+      <PageHeader title="Reconciliations" subtitle="Each one is a saved workflow. Run it on the files you choose, or start from the COD Reconciliation template.">
         <div className="flex flex-wrap gap-2">
-          <Link to="/builder" className="rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand-dark">Create workflow</Link>
+          <Link to="/templates" className="rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand-dark">Start from a template</Link>
+          <Link to="/builder" className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50">Build your own</Link>
           <input aria-label="Search workflows" placeholder="Search workflows" value={search} onChange={(e) => setSearch(e.target.value)}
             className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
           <select aria-label="Filter by status" value={filter} onChange={(e) => setFilter(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">

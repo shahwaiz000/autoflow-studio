@@ -4,14 +4,14 @@ Written for Shahwaiz. Read it out loud a few times. Every claim below is true of
 
 ## The 30-second pitch
 
-"AutoFlow Studio is a workflow automation tool I built, a small version of tools like Zapier or n8n. You build a workflow from steps: load a CSV, check the data, branch with an if/else, clean it, send a notification, make a report. You can run it by hand, on a schedule, or in the background, and every run is recorded step by step. I come from finance, where I do daily COD reconciliation, so I built it around the kind of work that repeats every day: checking invoices, cleaning customer lists, onboarding new hires. All the data in it is fictional."
+"AutoFlow Studio automates the reconciliation I do every day at work: matching courier cash-on-delivery collections against bank deposits. You give it the two files, it matches every waybill to its bank reference, compares the amounts, and gives back a short list of exceptions, each with a plain reason: missing deposit, amount differs, duplicate, and so on. It runs on a schedule, keeps a history of every run, and produces an Excel report. Under the hood it is a small workflow engine, so the same steps can be rearranged for other matching jobs. All the data in it is fictional."
 
 ## The 2-minute version (if they say "tell me more")
 
-1. **The problem.** Repeated data work (reconciliation, checks, cleaning) is done by hand and errors slip in. A workflow tool makes the steps visible, repeatable and logged.
-2. **What it does.** Drag-and-drop builder, form editor, templates, a run history with a flow diagram that colors the path a run took, CSV upload and cleaning, analytics, schedules, a Data Sources page, login, a background queue, and a rules-based assistant.
+1. **The problem.** Finance teams compare two lists by hand every day (what couriers collected against what reached the bank), and differences get missed. The tool finds every difference and explains it, so people only review what is wrong.
+2. **What it does.** A Compare step with exceptions and reasons, Excel and CSV reports, an overview of the latest reconciliation, run history with a flow diagram, schedules, files chosen at run time, a drag-and-drop builder for custom rules, login, a background queue, and a rules-based assistant that builds reconciliation workflows.
 3. **How it is built.** React + TypeScript on the front, FastAPI + SQLAlchemy + SQLite + Pandas on the back. Workflows are stored as JSON data, and the engine only runs a fixed list of step types.
-4. **How I checked it.** 163 backend tests and 73 frontend tests, plus I ran the real server and tried the features end to end.
+4. **How I checked it.** 148 backend tests and 67 frontend tests, plus I ran the real server and tried the features end to end.
 5. **What it is not.** A single-owner local tool. It is not ready for the internet or many users, and I know why (see "Limits").
 
 ## How a run works (draw this on a whiteboard)
@@ -29,8 +29,8 @@ Each step is saved with its time, number of attempts and a message. A failed ste
 
 - **Workflows are data, not code.** The editor saves JSON. `clean_definition` rejects anything unknown, and the engine only has handlers for 8 step types. So nobody can make the server run arbitrary code through a workflow. This is the most important safety decision.
 - **Everything the assistant proposes goes through the same check as the editor.** It cannot make a workflow the engine cannot run, and nothing is saved until the user clicks.
-- **Real numbers only.** The dashboard computes everything from stored runs. "Estimated time saved" only appears if the user types how many minutes a run saves.
-- **Seeded demo runs are labelled** and can be filtered out of analytics, so the charts are not pretending to be real usage.
+- **Real numbers only.** The overview computes everything from stored reconciliation results. I removed the randomly generated demo history and the unrelated demo workflows, because made-up numbers on a dashboard mislead.
+- **The right answer is known.** The sample files have 7 planted differences, so the tests can check that matching finds exactly 55 matches and those 7 exceptions.
 - **Uploads are stored under random names**, limited to 5 MB and 50,000 rows, and exported CSV cells are neutralised so Excel does not treat text as a formula.
 - **Login.** Passwords hashed with scrypt, session tokens stored only as hashes, HttpOnly cookie, lockout after 5 wrong tries, requests from unknown websites refused.
 - **Schedules never pile up.** If the backend was off for three days, a missed run happens once, not 864 times.
@@ -84,12 +84,12 @@ Saying these first sounds confident, not weak.
 
 ## A 5-minute demo script
 
-1. **Dashboard** (10 s): "Every number comes from stored runs."
-2. **Assistant** (60 s): type "Check invoices and alert finance if any are incomplete", show the reasons and warnings, save and run.
-3. **Executions** (45 s): open that run, show the colored path and the step log.
-4. **Builder** (45 s): drag a step, draw an arrow, show the check before saving.
-5. **Schedules** (30 s): add a 5-minute schedule, explain the limit.
-6. **Upload CSV + Data Sources** (60 s): upload a messy file, show the cleaned result and the preview.
+1. **Overview** (15 s): "Every number comes from stored runs." Empty before the first run.
+2. **Reconciliations** (60 s): run COD Reconciliation, choose courier_collections.csv and bank_deposits.csv.
+3. **Run page** (60 s): 55 matched, 7 exceptions, filter by type, read the reasons, download the Excel report.
+4. **Assistant** (45 s): type "Reconcile courier collections with bank deposits and alert finance if anything does not match", show the reasons, save and run.
+5. **Builder** (30 s): show the Compare step settings (matching columns, allowed difference).
+6. **Schedules** (30 s): add a daily schedule, explain the limit.
 7. **Close** (30 s): the limits list above, then "next I would add email notifications and PostgreSQL."
 
 ## Before the interview

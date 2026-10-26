@@ -1,6 +1,6 @@
 """Built-in assistant. It uses plain rules, NOT an AI language model.
 
-It turns a plain-English request into a workflow made only of the engine's own
+It turns a plain-English reconciliation request into a workflow made only of the engine's own
 step types, explains existing workflows, and summarizes failures. It is free,
 runs offline and never executes anything: every proposal passes through
 `clean_definition`, the same check that guards the workflow editor.
@@ -22,29 +22,20 @@ from .models import Execution, Workflow
 PROVIDER = "rules"
 
 DATASETS = [
-    dict(label="Invoices", noun="invoice", file="invoices.csv", category="Finance", alert_to="finance@example.com",
-         words=r"invoices?|bills?|vendors?|payables?|payments?", required=["invoice_id", "vendor", "amount"], numeric=["amount"]),
-    dict(label="New hires", noun="new-hire", file="employees.csv", category="HR", alert_to="hr@example.com",
-         words=r"employees?|hires?|hiring|onboarding|staff|hr|joiners?", required=["employee_id", "name", "department"], numeric=[]),
-    dict(label="Customers", noun="customer", file="customers.csv", category="Data", alert_to="support@example.com",
-         words=r"customers?|clients?|contacts?|mailing list|email list", required=["customer_id", "email"], numeric=[]),
-    dict(label="Sales orders", noun="sales order", file="sales_orders.csv", category="Sales", alert_to="sales@example.com",
-         words=r"sales|orders?|revenue|regions?", required=["order_id", "region", "revenue"], numeric=["revenue", "units"]),
     dict(label="Courier collections", noun="collection", file="courier_collections.csv", category="Finance", alert_to="finance@example.com",
          words=r"courier|cod|collections?|waybills?|parcels?|deliver\w*", required=["waybill", "courier", "cod_amount"], numeric=["cod_amount"]),
     dict(label="Bank deposits", noun="deposit", file="bank_deposits.csv", category="Finance", alert_to="finance@example.com",
          words=r"bank|deposits?|settlements?|remittances?", required=["reference", "amount"], numeric=[]),
 ]
-PAIR = dict(left=DATASETS[4], right=DATASETS[5], left_key="waybill", right_key="reference", left_amount="cod_amount", right_amount="amount")
+PAIR = dict(left=DATASETS[0], right=DATASETS[1], left_key="waybill", right_key="reference", left_amount="cod_amount", right_amount="amount")
 
 LIMITS = [
     "It follows rules and keywords. It is not an AI language model and does not understand every sentence.",
-    "It can only build workflows from the sample files and the built-in step types. Reconciliation works for one pair: courier collections against bank deposits.",
+    "It builds one kind of workflow: courier collections reconciled against bank deposits, using the sample files. For your own files use the COD Reconciliation template.",
     "Notifications are recorded in the run log only. Nothing is emailed or sent.",
     "The assistant does not set schedules. Save the workflow, then add a schedule on the Schedules page.",
 ]
 
-PROBLEM = r"missing|incomplete|problems?|errors?|issues?|invalid|empty|blank|wrong|bad|broken"
 EMAIL = re.compile(r"[A-Za-z0-9._%+-]{1,40}@[A-Za-z0-9.-]{1,60}\.[A-Za-z]{2,10}")
 
 
@@ -66,16 +57,6 @@ def info() -> dict:
         "provider": PROVIDER, "uses_ai_model": False, "limits": LIMITS,
         "datasets": [{"label": d["label"], "file": d["file"], "columns": _columns(d["file"])} for d in DATASETS],
     }
-
-
-def _pick_dataset(text: str):
-    hits = []
-    for d in DATASETS:
-        found = [m.start() for m in re.finditer(rf"\b(?:{d['words']})\b", text)]
-        if found:
-            hits.append((-len(found), found[0], d))
-    hits.sort(key=lambda h: (h[0], h[1]))
-    return (hits[0][2], [h[2] for h in hits[1:]]) if hits else (None, [])
 
 
 def _unique_name(db: Session, name: str) -> str:
@@ -153,117 +134,9 @@ def propose(db: Session, request: str) -> dict:
             "steps": [], "reasons": [], "warnings": []}
     if _has(text, RECONCILE):
         return _propose_reconcile(db, request, text, base)
-    ds, others = _pick_dataset(text)
-    if ds is None:
-        return {**base, "message": "I could not tell which data you want to work with. Mention one of: "
-                + ", ".join(d["label"].lower() for d in DATASETS) + ". For example: \"Check invoices and alert finance if any are incomplete.\""}
-
-    warnings = []
-    if others:
-        warnings.append(f"A workflow uses one file, so I used {ds['file']}. I ignored: " + ", ".join(o["file"] for o in others) + ".")
-    if _has(text, r"every|daily|weekly|monthly|hourly|each (?:day|week|month|morning)|schedule\w*|at \d{1,2}(?::\d{2})? ?(?:am|pm)"):
-        warnings.append("The assistant does not set schedules. Save the workflow, then add a schedule on the Schedules page.")
-    if _has(text, r"slack|sms|whatsapp|teams|telegram|database|sql|sap|api|sharepoint|google sheets?|pdf"):
-        warnings.append("Only CSV and Excel files are supported, and I can only use the sample files. Other systems are not connected.")
-
-    wants_alert = _has(text, r"alert|notif\w*|warn|tell|inform|e-?mail|message|let me know|remind|flag|ping")
-    only_on_problem = wants_alert and _has(text, PROBLEM) and _has(text, r"only|if|when|whenever|unless|once|any")
-    strict = _has(text, r"strict|stop|fail|block|reject|halt|abort|must be complete")
-    wants_clean = _has(text, r"clean\w*|tidy|dedup\w*|duplicates?|trim|remove|fix|normali[sz]e|spaces")
-    wants_retry = _has(text, r"retry|retries|try again|again")
-    recipient = next(iter(EMAIL.findall(request)), None) or ds["alert_to"]
-
-    threshold, op = 0, ">"
-    m = re.search(r"\b(more than|over|above|greater than|exceed\w*|at least)\s+(\d{1,6})\b", text)
-    if m and only_on_problem:
-        threshold, op = int(m.group(2)), ">=" if m.group(1) == "at least" else ">"
-
-    wants_check = _has(text, r"check|validate|verif\w*|audit|inspect|review|find")
-    if strict and only_on_problem:
-        strict = False
-        warnings.append("You asked both to stop and to alert. A run that stops cannot send an alert afterwards, "
-                        "so I kept the alert and did not stop the run.")
-
-    load_why = f"You mentioned {ds['label'].lower()}, so I chose the sample file {ds['file']}."
-    if wants_retry:
-        load_why += " You asked to try again, so loading is retried up to 2 times."
-    blocks = [("trigger", "Start", {}, "Every workflow needs a start. It begins when you click Run.", 0),
-              ("load_csv", f"Load {ds['label'].lower()}", {"file": ds["file"]}, load_why, 2 if wants_retry else 0)]
-    vcfg = {"required_columns": ds["required"], "numeric_columns": ds["numeric"], "fail_on_errors": bool(strict)}
-    why = "A check step makes sure the file has the columns " + ", ".join(ds["required"]) + " and finds empty cells."
-    if ds["numeric"]:
-        why += " It also checks that " + ", ".join(ds["numeric"]) + " hold numbers."
-    if strict:
-        why += " You asked to stop on problems, so the run fails when any row is incomplete."
-    blocks.append(("validate", f"Check {ds['noun']} data", vcfg, why, 0))
-
-    if wants_clean:
-        ops = []
-        if _has(text, r"trim|spaces|tidy|clean\w*|normali[sz]e"):
-            ops.append("trim_text")
-        if _has(text, r"dedup\w*|duplicates?|clean\w*|tidy"):
-            ops.append("drop_duplicates")
-        if _has(text, r"empty|blank|missing|incomplete|clean\w*|tidy"):
-            ops.append("drop_missing")
-        if ds["numeric"] and _has(text, r"invalid|non-?numeric|not numbers?|text in"):
-            ops.append("drop_invalid_numbers")
-        defaulted = not ops
-        if defaulted:
-            ops = ["trim_text", "drop_duplicates", "drop_missing"]
-        cfg = {"operations": ops, "numeric_columns": ds["numeric"] if "drop_invalid_numbers" in ops else []}
-        why = "You asked to clean the data, so this step applies: " + ", ".join(o.replace("_", " ") for o in ops) + "."
-        if defaulted:
-            why += " You did not name specific fixes, so I used the usual three."
-        blocks.append(("transform", "Clean data", cfg, why, 0))
-
-    if only_on_problem:
-        blocks.append(("condition", "Any problem rows?", {"field": "invalid_rows", "op": op, "value": threshold},
-                       f"You want an alert only when there are problems, so this step checks if problem rows are {op} {threshold}.", 0))
-        blocks.append(("notify", f"Alert {recipient.split('@')[0]}", {"to": recipient, "message": f"Some {ds['label'].lower()} have problems"},
-                       f"Sends the alert to {recipient} (recorded in the run log; nothing is emailed).", 0))
-    elif wants_alert:
-        blocks.append(("notify", f"Notify {recipient.split('@')[0]}", {"to": recipient, "message": f"{ds['label']} check finished"},
-                       f"You asked for a notification, so one goes to {recipient} (recorded in the run log; nothing is emailed).", 0))
-
-    blocks.append(("report", "Generate report", {}, "Writes a summary and the processed data, so every run leaves a result you can download.", 0))
-    blocks.append(("end", "Done", {}, "Marks the end of the workflow.", 0))
-
-    ids = [f"s{i}" for i in range(1, len(blocks) + 1)]
-    steps, notes = [], []
-    for i, (typ, name, cfg, why, retries) in enumerate(blocks):
-        step = {"id": ids[i], "type": typ, "name": name, "config": dict(cfg)}
-        if retries:
-            step["retries"] = retries
-        if typ == "condition":  # true -> the alert, false -> skip it to the step after the alert
-            step["config"]["on_true"], step["config"]["on_false"] = ids[i + 1], ids[i + 2]
-        if typ == "notify" and only_on_problem:
-            step["next"] = ids[i + 1]
-        steps.append(step)
-        notes.append({"step": name, "why": why})
-
-    definition, errors = clean_definition(steps)
-    if errors:  # should never happen; if it does, say so instead of offering a broken workflow
-        return {**base, "message": "I built a draft that did not pass the safety check: " + "; ".join(errors)}
-
-    actions = []
-    if strict:
-        actions.append("strict check")
-    elif wants_check or wants_alert:
-        actions.append("check")
-    if wants_clean:
-        actions.append("cleanup")
-    if wants_alert:
-        actions.append("alert")
-    if not actions:
-        actions.append("summary")
-    name = _unique_name(db, f"{ds['label']} {' and '.join(actions)}")
-    return {
-        "status": "ok", "request": request, "provider": PROVIDER, "uses_ai_model": False,
-        "name": name, "category": ds["category"],
-        "description": f"Built by the assistant from: \"{request.strip()[:300]}\"",
-        "dataset": {"label": ds["label"], "file": ds["file"], "columns": _columns(ds["file"])},
-        "steps": definition["steps"], "reasons": notes, "warnings": warnings,
-    }
+    return {**base, "message": "I build reconciliation workflows. Describe what to compare, for example: "
+            "\"Reconcile courier collections with bank deposits and alert finance if anything does not match.\" "
+            "For your own two files, use the template 'COD Reconciliation' and choose your files when you run it."}
 
 
 # ---------- Explain a workflow ----------

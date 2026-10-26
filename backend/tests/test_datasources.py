@@ -7,7 +7,7 @@ CSV = b"name,amount\nAnna,10\nBen,20\nCara,30\n"
 
 
 def upload(client, name="report one.csv", data=CSV):
-    r = client.post("/api/uploads", files={"file": (name, io.BytesIO(data), "text/csv")})
+    r = client.post("/api/datasources/uploads", files={"file": (name, io.BytesIO(data), "text/csv")})
     assert r.status_code == 201, r.text
     return r.json()
 
@@ -26,10 +26,10 @@ def test_samples_are_listed_with_rows_columns_and_the_workflows_that_use_them(cl
     assert "Invoice Processing" in inv["used_by"]
 
 
-def test_an_upload_keeps_its_original_name_and_links_to_its_run(client):
-    ex = upload(client, "my sales.csv")
+def test_an_upload_keeps_its_original_name(client):
+    upload(client, "my sales.csv")
     f = next(x for x in client.get("/api/datasources").json()["uploads"] if x["original_name"] == "my sales.csv")
-    assert f["rows"] == 3 and f["columns"] == ["name", "amount"] and f["execution_id"] == ex["id"]
+    assert f["rows"] == 3 and f["columns"] == ["name", "amount"]
     assert f["name"].endswith(".csv") and "sales" not in f["name"]  # stored under a random name
 
 
@@ -64,14 +64,13 @@ def test_samples_cannot_be_deleted(client):
     assert client.get("/api/datasources/samples/invoices.csv/preview").status_code == 200
 
 
-def test_deleting_an_upload_removes_the_file_but_keeps_run_history(client):
-    ex = upload(client, "delete me.csv")
+def test_deleting_an_upload_removes_the_file(client):
+    upload(client, "delete me.csv")
     name = stored_name(client, "delete me.csv")
     assert client.delete(f"/api/datasources/uploads/{name}").status_code == 200
     assert all(f["name"] != name for f in client.get("/api/datasources").json()["uploads"])
     assert client.get(f"/api/datasources/uploads/{name}/preview").status_code == 404
     assert client.delete(f"/api/datasources/uploads/{name}").status_code == 404
-    assert client.get(f"/api/executions/{ex['id']}").json()["status"] == "success"
 
 
 def test_a_file_that_is_not_a_table_is_reported_not_crashed(client):

@@ -5,22 +5,20 @@ import { useApi } from "../lib";
 import { Icon, type IconName } from "./icons";
 
 const LIVE: { to: string; label: string; icon: IconName; end?: boolean }[] = [
-  { to: "/", label: "Dashboard", icon: "dashboard", end: true },
-  { to: "/workflows", label: "Workflows", icon: "workflow" },
-  { to: "/builder", label: "Builder", icon: "builder" },
-  { to: "/templates", label: "Templates", icon: "templates" },
-  { to: "/executions", label: "Executions", icon: "executions" },
-  { to: "/analytics", label: "Analytics", icon: "analytics" },
-  { to: "/upload", label: "Upload CSV", icon: "upload" },
+  { to: "/", label: "Overview", icon: "dashboard", end: true },
+  { to: "/workflows", label: "Reconciliations", icon: "workflow" },
+  { to: "/executions", label: "Run history", icon: "executions" },
+  { to: "/data-sources", label: "Data files", icon: "database" },
   { to: "/schedules", label: "Schedules", icon: "clock" },
-  { to: "/data-sources", label: "Data Sources", icon: "database" },
   { to: "/assistant", label: "Assistant", icon: "sparkles" },
 ];
 const SOON: { label: string; icon: IconName }[] = [];
 
 function pageTitle(path: string): string {
-  if (path === "/") return "Dashboard";
+  if (path === "/") return "Overview";
   if (path.startsWith("/account")) return "Account";
+  if (path.startsWith("/builder")) return "Workflow builder";
+  if (path.startsWith("/templates")) return "Templates";
   const hit = LIVE.filter((l) => l.to !== "/" && path.startsWith(l.to)).sort((a, b) => b.to.length - a.to.length)[0];
   return hit ? hit.label : "AutoFlow Studio";
 }
@@ -122,8 +120,8 @@ export default function Layout() {
               <span className={`h-2 w-2 rounded-full ${checking ? "bg-slate-300" : online ? "bg-mint" : "bg-coral"}`} aria-hidden="true" />
               {checking ? "Checking API" : online ? "API online" : "API offline"}
             </span>
-            <Link to="/upload" className="hidden items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:inline-flex">
-              <Icon name="upload" className="h-4 w-4" /> Upload CSV
+            <Link to="/data-sources" className="hidden items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:inline-flex">
+              <Icon name="upload" className="h-4 w-4" /> Add files
             </Link>
             <Link to="/builder" className="inline-flex items-center gap-2 rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-brand-dark">
               <Icon name="plus" className="h-4 w-4" /> New workflow

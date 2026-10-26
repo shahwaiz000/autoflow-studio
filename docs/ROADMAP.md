@@ -1,5 +1,7 @@
 # AutoFlow Studio: honest review and roadmap
 
+> **Update, October 2026.** Phases 1 and 2 are done: Excel, several tables, files chosen at run time, the Compare step with exceptions and reasons, the COD template and the assistant. The project was then refocused on reconciliation: the Upload CSV page, the Analytics page, the form editor, the unrelated demo workflows and templates, and the made-up demo history were removed. The review below describes the project before that and is kept for the reasoning.
+
 No code was changed for this document. It is based on reading the actual code, not the buttons.
 
 ## 1. What really works today, and what does not
@@ -82,7 +84,7 @@ Ordered by what unlocks the next thing.
 - Fix the weak parts honestly: a real **report** (not `describe()`), and clearer trigger labels.
 - *Why first:* nothing else is possible until a workflow can use two real files.
 
-### Phase 2: The most valuable real automation
+### Phase 2: The most valuable real automation (done)
 - A **Compare** step: match on a key, tolerance for amounts, outputs matched, missing in A, missing in B, mismatched amounts, duplicates.
 - **Exceptions list** with a plain reason for every row.
 - Fictional but realistic sample data: courier collections vs bank deposits, invoices vs payments.
