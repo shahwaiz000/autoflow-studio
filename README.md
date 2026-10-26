@@ -82,9 +82,13 @@ frontend/src/
 
 ## Screenshots
 
-**Dashboard.** Numbers and charts are calculated from stored executions.
+**Dashboard.** Automation health, runs per day, week-over-week stat cards and quick actions. Every number is calculated from stored executions.
 
 ![Dashboard](docs/screenshots/dashboard.png)
+
+**Dashboard, lower half.** Workflow status with success bars, a failure summary, and recent activity.
+
+![Dashboard activity](docs/screenshots/dashboard-activity.png)
 
 **Workflow library.** Run, edit, enable or disable workflows.
 
