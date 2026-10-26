@@ -6,7 +6,7 @@ const info = { provider: "rules", uses_ai_model: false, limits: ["Notifications 
   datasets: [{ label: "Invoices", file: "invoices.csv", columns: ["invoice_id"] }] };
 const proposal = {
   status: "ok", request: "x", name: "Invoices check and alert", description: "Built by the assistant", category: "Finance",
-  warnings: ["Scheduling is not built yet. This workflow runs when you click Run."],
+  warnings: ["The assistant does not set schedules. Save the workflow, then add a schedule on the Schedules page."],
   steps: [{ id: "s1", type: "trigger", name: "Start", config: { kind: "manual" } }, { id: "s2", type: "end", name: "Done", config: {} }],
   reasons: [{ step: "Start", why: "Every workflow needs a start." }, { step: "Done", why: "Marks the end." }],
 };
@@ -63,7 +63,7 @@ it("shows a proposal with reasons and warnings, and fills examples on click", as
   fireEvent.click(screen.getByRole("button", { name: /Suggest a workflow/ }));
   expect(await screen.findByDisplayValue("Invoices check and alert")).toBeInTheDocument();
   expect(screen.getByText("Every workflow needs a start.")).toBeInTheDocument();
-  expect(screen.getByRole("list", { name: "Things to know" })).toHaveTextContent("Scheduling is not built yet");
+  expect(screen.getByRole("list", { name: "Things to know" })).toHaveTextContent("Schedules page");
   expect(calls.find((c) => c.url === "/api/assistant/propose")?.method).toBe("POST");
 });
 

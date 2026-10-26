@@ -84,3 +84,34 @@ class ExecutionStep(Base):
             "name": self.name, "status": self.status, "attempts": self.attempts,
             "message": self.message, "duration_ms": self.duration_ms,
         }
+
+
+class Schedule(Base):
+    """Run a workflow automatically. Times are stored in UTC; tz_offset_minutes only
+    says which clock the person meant (for example +180 for Jeddah)."""
+    __tablename__ = "schedules"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    workflow_id: Mapped[int] = mapped_column(ForeignKey("workflows.id"))
+    kind: Mapped[str] = mapped_column(String(10))  # interval | daily | weekly
+    interval_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    time_of_day: Mapped[str | None] = mapped_column(String(5), nullable=True)  # "HH:MM" on the person's clock
+    weekday: Mapped[int | None] = mapped_column(Integer, nullable=True)  # 0 = Monday
+    tz_offset_minutes: Mapped[int] = mapped_column(Integer, default=0)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    next_run_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_status: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    last_execution_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    workflow: Mapped[Workflow] = relationship()
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id, "workflow_id": self.workflow_id, "workflow_name": self.workflow.name,
+            "workflow_enabled": self.workflow.enabled, "kind": self.kind,
+            "interval_minutes": self.interval_minutes, "time_of_day": self.time_of_day,
+            "weekday": self.weekday, "tz_offset_minutes": self.tz_offset_minutes,
+            "enabled": self.enabled, "next_run_at": iso(self.next_run_at),
+            "last_run_at": iso(self.last_run_at), "last_status": self.last_status,
+            "last_execution_id": self.last_execution_id, "created_at": iso(self.created_at),
+        }

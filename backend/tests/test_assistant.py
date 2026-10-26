@@ -77,7 +77,7 @@ def test_threshold_and_recipient_are_taken_from_the_request(client):
 def test_unsupported_wishes_are_reported_not_hidden(client):
     p = propose(client, "Every Monday check the invoices and send a Slack message")
     text = " ".join(p["warnings"])
-    assert "Scheduling is not built yet" in text and "Only CSV files are supported" in text
+    assert "Schedules page" in text and "Only CSV files are supported" in text
 
 
 def test_stop_and_alert_conflict_is_explained(client):

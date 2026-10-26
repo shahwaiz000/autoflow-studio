@@ -36,7 +36,7 @@ LIMITS = [
     "It follows rules and keywords. It is not an AI language model and does not understand every sentence.",
     "It can only build workflows from the four sample CSV files and the built-in step types.",
     "Notifications are recorded in the run log only. Nothing is emailed or sent.",
-    "Scheduling is not built yet, so workflows run when you click Run.",
+    "The assistant does not set schedules. Save the workflow, then add a schedule on the Schedules page.",
 ]
 
 PROBLEM = r"missing|incomplete|problems?|errors?|issues?|invalid|empty|blank|wrong|bad|broken"
@@ -95,7 +95,7 @@ def propose(db: Session, request: str) -> dict:
     if others:
         warnings.append(f"A workflow uses one file, so I used {ds['file']}. I ignored: " + ", ".join(o["file"] for o in others) + ".")
     if _has(text, r"every|daily|weekly|monthly|hourly|each (?:day|week|month|morning)|schedule\w*|at \d{1,2}(?::\d{2})? ?(?:am|pm)"):
-        warnings.append("Scheduling is not built yet. This workflow runs when you click Run.")
+        warnings.append("The assistant does not set schedules. Save the workflow, then add a schedule on the Schedules page.")
     if _has(text, r"slack|sms|whatsapp|teams|telegram|database|sql|sap|api|excel|xlsx|sharepoint|google sheets?|pdf"):
         warnings.append("Only CSV files are supported, so I used a sample CSV. Other systems are not connected.")
 

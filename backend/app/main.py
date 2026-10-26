@@ -10,11 +10,11 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from . import analytics, assistant
+from . import analytics, assistant, schedules
 from .config import settings
 from .database import Base, SessionLocal, engine, get_db
 from .engine import run_workflow
-from .models import Execution, Workflow
+from .models import Execution, Schedule, Workflow, iso, utcnow
 from .definitions import clean_definition
 from .seed import WORKFLOWS, seed
 from .templates import TEMPLATES
@@ -27,7 +27,13 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(engine)
     with SessionLocal() as db:
         seed(db)
+    if settings.scheduler_enabled:
+        schedules.scheduler = schedules.Scheduler(SessionLocal, settings.scheduler_tick_seconds)
+        schedules.scheduler.start()
     yield
+    if schedules.scheduler:
+        schedules.scheduler.stop()
+        schedules.scheduler = None
 
 
 app = FastAPI(title="AutoFlow Studio API", version="0.1.0", lifespan=lifespan)
@@ -269,6 +275,7 @@ def delete_workflow(wid: int, db: Session = Depends(get_db)):
         raise HTTPException(409, "Built-in workflows cannot be deleted. You can disable them instead")
     if db.query(Execution).filter_by(workflow_id=wid).count():
         raise HTTPException(409, "This workflow has run history, so it cannot be deleted. Disable it instead")
+    db.query(Schedule).filter_by(workflow_id=wid).delete()
     db.delete(wf)
     db.commit()
     return {"deleted": True}
@@ -320,3 +327,75 @@ def assistant_explain(wid: int, db: Session = Depends(get_db)):
 def assistant_failures(days: int = Query(14, ge=1, le=365), source: str = Query("all", pattern=SOURCE),
                        db: Session = Depends(get_db)):
     return assistant.failures(db, days, source)
+
+
+class ScheduleIn(BaseModel):
+    workflow_id: int
+    kind: str
+    interval_minutes: int | None = None
+    time_of_day: str | None = Field(None, max_length=5)
+    weekday: int | None = None
+    tz_offset_minutes: int = 0
+
+
+class SchedulePatch(BaseModel):
+    enabled: bool
+
+
+def _get_schedule(db: Session, sid: int) -> Schedule:
+    s = db.get(Schedule, sid)
+    if not s:
+        raise HTTPException(404, f"Schedule {sid} not found")
+    return s
+
+
+def _sched_dict(s: Schedule) -> dict:
+    return {**s.to_dict(), "summary": schedules.describe(s)}
+
+
+@app.get("/api/schedules/status")
+def schedules_status(db: Session = Depends(get_db)):
+    sch = schedules.scheduler
+    return {"running": bool(sch and sch.running), "checks_every_seconds": settings.scheduler_tick_seconds,
+            "last_check": iso(sch.last_tick) if sch else None,
+            "active": db.query(Schedule).filter_by(enabled=True).count(),
+            "note": "Schedules only run while the backend is running."}
+
+
+@app.get("/api/schedules")
+def list_schedules(db: Session = Depends(get_db)):
+    rows = db.query(Schedule).order_by(Schedule.id).all()
+    return [_sched_dict(s) for s in rows]
+
+
+@app.post("/api/schedules", status_code=201)
+def create_schedule(body: ScheduleIn, db: Session = Depends(get_db)):
+    wf = _get_workflow(db, body.workflow_id)
+    errs = schedules.check(body.kind, body.interval_minutes, body.time_of_day, body.weekday, body.tz_offset_minutes)
+    if errs:
+        raise HTTPException(422, "; ".join(errs))
+    s = schedules.create(db, wf, body.kind, body.interval_minutes, body.time_of_day, body.weekday, body.tz_offset_minutes)
+    return _sched_dict(s)
+
+
+@app.patch("/api/schedules/{sid}")
+def patch_schedule(sid: int, body: SchedulePatch, db: Session = Depends(get_db)):
+    s = _get_schedule(db, sid)
+    s.enabled = body.enabled
+    if body.enabled:  # start counting from now, so old missed times do not fire
+        s.next_run_at = schedules.next_run(s, utcnow())
+    db.commit()
+    return _sched_dict(s)
+
+
+@app.delete("/api/schedules/{sid}")
+def delete_schedule(sid: int, db: Session = Depends(get_db)):
+    db.delete(_get_schedule(db, sid))
+    db.commit()
+    return {"deleted": True}
+
+
+@app.post("/api/schedules/run-due")
+def schedules_run_due(db: Session = Depends(get_db)):
+    """Run anything that is due right now (the background thread does this on its own)."""
+    return {"ran": schedules.run_due(db)}

@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./autoflow.db"
     data_dir: Path = Path("./data")
     cors_origins: str = "http://localhost:5173"
+    scheduler_enabled: bool = True
+    scheduler_tick_seconds: int = 20
 
     @property
     def samples_dir(self) -> Path:

@@ -17,11 +17,12 @@ A business workflow automation platform. You build workflows from simple steps, 
 - **CSV upload and cleaning.** Upload a CSV (max 5 MB). The app finds missing values, duplicates and text where numbers should be, cleans the file, and offers the cleaned file and a summary for download.
 - **Analytics.** Volume and duration charts, workflow comparison, common failure reasons, and a CSV export. A filter separates seeded demo data from your own runs.
 - **Assistant (rules-based).** Describe a workflow in plain English and get a proposed workflow built only from the engine's own step types, with the reason for each step and warnings about anything it cannot do. It can also explain an existing workflow in plain words with improvement ideas, and summarize why runs failed with advice. It is **not an AI language model**: it follows keyword rules, is free, and works offline. Nothing is saved until you click save.
-- **Tests.** 52 backend tests (pytest) and 30 frontend tests (Vitest).
+- **Schedules.** Run a workflow every few minutes (5 or more), every day, or every week at a time on your computer's clock. A small background thread inside the backend checks every 20 seconds. Runs are recorded as "schedule" runs. A page shows the next and last run, and says honestly whether the scheduler is running. Schedules only run while the backend is running, and a run missed while it was off is done once on start-up, not repeated.
+- **Tests.** 66 backend tests (pytest) and 37 frontend tests (Vitest).
 
 ## Not built yet
 
-Scheduling, a language-model assistant (the current assistant is rule-based), a Data Sources page, user accounts. Notification steps only write to the log. Nothing is emailed.
+A language-model assistant (the current assistant is rule-based), a Data Sources page, user accounts. Notification steps only write to the log. Nothing is emailed.
 
 ## Technology (all free)
 
@@ -60,11 +61,12 @@ backend/app/
   definitions.py  checks every workflow the editor saves
   analytics.py    dashboard and analytics numbers, CSV export
   assistant.py    rules-based assistant: propose, explain, failure insights
+  schedules.py    schedules and the background scheduler thread
   models.py       Workflow, Execution, ExecutionStep tables
   seed.py         fictional sample data (safe to run many times)
   templates.py    ready-made workflow templates
 frontend/src/
-  pages/          Dashboard, Workflows, Builder, Editor, Templates, Executions, Analytics, Upload
+  pages/          Dashboard, Workflows, Builder, Editor, Templates, Executions, Analytics, Upload, Assistant, Schedules
   flow.ts         layout and checks for the flow diagrams and the builder
   components/     shared UI and the flow diagram
 ```

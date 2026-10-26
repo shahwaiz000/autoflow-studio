@@ -67,3 +67,11 @@ export interface FailureInsights {
   days: number; total_runs: number; total_failed: number; headline: string;
   items: { reason: string; count: number; workflows: string[]; example_execution_id: number | null; advice: string }[];
 }
+
+export interface Schedule {
+  id: number; workflow_id: number; workflow_name: string; workflow_enabled: boolean;
+  kind: "interval" | "daily" | "weekly"; interval_minutes: number | null; time_of_day: string | null;
+  weekday: number | null; tz_offset_minutes: number; enabled: boolean; summary: string;
+  next_run_at: string | null; last_run_at: string | null; last_status: string | null; last_execution_id: number | null;
+}
+export interface SchedulerStatus { running: boolean; checks_every_seconds: number; last_check: string | null; active: number; note: string }

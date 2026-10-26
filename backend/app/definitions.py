@@ -32,8 +32,8 @@ def _clean_config(t, cfg, where, errs):
     out = {}
     if t == "trigger":
         out["kind"] = cfg.get("kind", "manual")
-        if out["kind"] not in ("manual", "upload"):
-            errs.append(f"{where}: trigger kind must be manual or upload")
+        if out["kind"] not in ("manual", "upload", "schedule"):
+            errs.append(f"{where}: trigger kind must be manual, upload or schedule")
     elif t == "load_csv":
         f = cfg.get("file", "")
         if not _text(f, 100) or not f.lower().endswith(".csv") or "/" in f or "\\" in f:

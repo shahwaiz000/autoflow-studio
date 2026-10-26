@@ -49,7 +49,7 @@ export function Fields({ step, steps, samples, set }: { step: EStep; steps: ESte
   switch (step.type) {
     case "trigger":
       return <label className="block text-sm">Starts when<select className={input} value={c.kind} onChange={(e) => upd("kind", e.target.value)}>
-        <option value="manual">Someone clicks Run</option><option value="upload">A file is uploaded</option></select></label>;
+        <option value="manual">Someone clicks Run</option><option value="upload">A file is uploaded</option><option value="schedule">On a schedule</option></select></label>;
     case "load_csv":
       return <label className="block text-sm">Sample file
         <select className={input} value={c.file} onChange={(e) => upd("file", e.target.value)}>

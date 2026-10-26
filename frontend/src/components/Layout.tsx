@@ -11,6 +11,7 @@ const LIVE: { to: string; label: string; icon: IconName; end?: boolean }[] = [
   { to: "/executions", label: "Executions", icon: "executions" },
   { to: "/analytics", label: "Analytics", icon: "analytics" },
   { to: "/upload", label: "Upload CSV", icon: "upload" },
+  { to: "/schedules", label: "Schedules", icon: "clock" },
   { to: "/assistant", label: "Assistant", icon: "sparkles" },
 ];
 const SOON: { label: string; icon: IconName }[] = [
