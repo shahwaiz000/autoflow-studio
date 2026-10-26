@@ -89,3 +89,32 @@ def test_box_positions_are_saved_and_checked(client):
         b = _body(name="Bad Pos")
         b["steps"][0]["pos"] = bad
         assert client.post("/api/workflows", json=b).status_code == 422
+
+
+def test_delete_with_history_erases_runs_and_files_but_never_audited_ones(client):
+    from app.config import settings
+    body = lambda n: _body(name=n)
+    a = client.post("/api/workflows", json=body("Erase me")).json()["id"]
+    ex = client.post(f"/api/workflows/{a}/run").json()
+    client.post(f"/api/workflows/{a}/run")
+    assert client.delete(f"/api/workflows/{a}").status_code == 409  # by default history protects it
+    assert client.get(f"/api/workflows/{a}").status_code == 200
+    r = client.delete(f"/api/workflows/{a}", params={"with_history": "true"})
+    assert r.status_code == 200 and r.json() == {"deleted": True, "runs_deleted": 2}
+    assert client.get(f"/api/workflows/{a}").status_code == 404 and client.get(f"/api/executions/{ex['id']}").status_code == 404
+    assert not list(settings.reports_dir.glob(f"execution_{ex['id']}_*"))
+    # the built-in one can never be erased, with or without history
+    cod = next(w for w in client.get("/api/workflows").json() if w["name"] == "COD Reconciliation")
+    assert client.delete(f"/api/workflows/{cod['id']}", params={"with_history": "true"}).status_code == 409
+
+
+def test_a_workflow_whose_runs_were_reviewed_cannot_be_erased(client):
+    wf = client.post("/api/workflows/%d/run" % next(w["id"] for w in client.get("/api/workflows").json() if w["name"] == "COD Reconciliation"),
+                     json={"inputs": {"courier": {"source": "samples", "file": "courier_collections.csv"}, "bank": {"source": "samples", "file": "bank_deposits.csv"}}}).json()
+    copy = client.post("/api/templates/cod-reconciliation/use").json()
+    run = client.post(f"/api/workflows/{copy['id']}/run", json={"inputs": {"courier": {"source": "samples", "file": "courier_collections.csv"}, "bank": {"source": "samples", "file": "bank_deposits.csv"}}}).json()
+    first = client.get(f"/api/executions/{run['id']}/exceptions").json()["items"][0]["id"]
+    client.post(f"/api/executions/{run['id']}/exceptions/decide", json={"ids": [first], "decision": "approved", "note": "ok"})
+    r = client.delete(f"/api/workflows/{copy['id']}", params={"with_history": "true"})
+    assert r.status_code == 409 and "audit trail" in r.json()["error"]["message"]
+    assert client.get(f"/api/executions/{run['id']}").status_code == 200
