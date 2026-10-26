@@ -4,23 +4,40 @@ A business workflow automation platform. You build workflows from simple steps, 
 
 > Status: v0.6, work in progress. The sections below say exactly what works and what does not.
 
+## What it is for
+
+Finance and operations teams spend hours every day checking one list against another: cash collected by couriers against bank deposits, payments against invoices. AutoFlow Studio does that matching for you and hands back a short list of **exceptions**, each with a reason in plain words, so people only look at what is actually wrong.
+
 ## What works today
 
-- **Dashboard.** An automation health view (success ring, runs per day), week-over-week stat cards, average run time per day, a failure summary, workflow status with success bars, recent activity, and quick actions to run a workflow or upload a CSV. All numbers come from the database. "Estimated time saved" is only calculated from a manual time per run that you type in; nothing is assumed.
-- **Workflow library.** Search, filter, enable or disable, view steps, and run a workflow. Running starts real processing on the backend.
-- **Drag-and-drop builder.** Drag steps onto a canvas, draw arrows between them, click a box to change its settings, and save. A drawing is checked before saving (one Trigger, no loose ends). Built with React Flow (MIT license).
-- **Form editor.** The same workflows can also be edited with a plain form. Add steps, reorder them, set retries, and branch with an if/else condition.
-- **Execution engine.** Runs steps in order, follows branches, retries failed steps, and records every step with its time and message. Only a fixed list of step types can run, so no user-written code is ever executed.
-- **Flow diagrams.** Every workflow is drawn as boxes and arrows, with true/false branches. On a run's page the path that run took is colored.
-- **Templates.** Five ready-made workflows. One click makes your own editable copy.
-- **Execution history.** Every run with status, duration, trigger, error message and a step-by-step log.
-- **CSV upload and cleaning.** Upload a CSV (max 5 MB). The app finds missing values, duplicates and text where numbers should be, cleans the file, and offers the cleaned file and a summary for download.
-- **Analytics.** Volume and duration charts, workflow comparison, common failure reasons, and a CSV export. A filter separates seeded demo data from your own runs.
-- **Tests.** 37 backend tests (pytest) and 23 frontend tests (Vitest).
+**The core: COD reconciliation**
+
+- **Match and compare.** Choose a courier collections file and a bank deposits file (CSV or Excel). Each waybill is matched to its bank reference, ignoring case and stray spaces, and the amounts are compared within an allowed difference. Matching is one row to one row.
+- **Exceptions with reasons.** Everything that does not agree is listed: amount differs, missing in the bank file, missing in the courier file, duplicate waybill, amount missing or unreadable, no key. Each says which row it is in. The run page has totals, a filter and a CSV download. Up to 5,000 exceptions per run are stored.
+- **Review and audit trail.** On a run page, check one or more exceptions and Approve (the difference is understood and accepted), Reject (needs follow-up, a note is required) or Reopen. Each exception shows who decided, when and the note, and the run shows "3 of 7 reviewed". Every decision is written to an Audit trail page with who, when and what changed. The app can add entries but never edit or delete them (also blocked in the database layer). The Overview counts what is still to review, and the exceptions CSV includes the decisions.
+- **Reports.** An Excel workbook with Summary, Exceptions, Columns and Data sheets, and the exceptions as CSV. Text that looks like a formula is neutralised.
+- **Messy data tolerated.** Amounts like "SAR 1,234.50" or "(500.00)", dates in mixed formats and untidy references can be tidied first. Anything unreadable is counted and shown, never guessed.
+- **Overview page.** The latest reconciliation (match rate, exceptions, amount at risk), what is wrong by type, exceptions per day, and recent runs. Every number comes from stored results.
+- **Run history.** Every run, which files it used, a step-by-step log and a flow diagram showing the path it took.
+- **Schedules.** Run a reconciliation every few minutes, daily or weekly. Only while the backend is running, and workflows that need you to choose files are skipped and say why.
+- **Alert step.** "Alert finance if there are exceptions". Alerts are written to the run log. Nothing is emailed yet.
+
+**Around it**
+
+- **Data files.** Add, preview and delete CSV and Excel files. Files are stored under random names.
+- **Reconciliations page.** Run a saved workflow on files you choose at that moment (or add one on the spot). It runs in the background so the page never freezes.
+- **Template and visual builder.** Start from the COD Reconciliation template, or draw your own with drag and drop. A drawing is checked before saving. Only a fixed list of step types can run, so no user-written code is executed.
+- **Assistant (rules-based, not an AI model).** Describe a reconciliation in plain English and get a proposed workflow with the reason for each step. It can also explain a workflow and summarise why runs failed. It is free and works offline.
+- **Login.** One owner account, scrypt password hashing, HttpOnly session cookie, lockout after five wrong passwords, origin check on changes.
+- **Tests.** 161 backend tests (pytest) and 74 frontend tests (Vitest).
 
 ## Not built yet
 
-Scheduling, AI assistant, a Data Sources page, user accounts. Notification steps only write to the log. Nothing is emailed.
+A workflow step that pauses a run until someone approves it (review happens after the run, on its page), many-to-one matching (one deposit covering many parcels), anomaly flags, emailed notifications, folder watching, multiple users and roles, a language-model assistant. The old .xls format is not supported.
+
+## Sample data
+
+Two fictional files, `courier_collections.csv` (61 rows) and `bank_deposits.csv` (58 rows), with 7 planted differences: 3 collections never deposited, 2 amounts that differ, 1 deposit nobody collected and 1 duplicate waybill. The right answer is known (55 matched, 7 exceptions), which is how the tests check the matching. Versions before this one shipped unrelated demo workflows and randomly generated runs. They were removed, and on start-up any such leftovers that you never used are cleaned away.
 
 ## Technology (all free)
 
@@ -57,14 +74,22 @@ backend/app/
   main.py         API routes and a consistent error format
   engine.py       workflow execution (whitelisted step types)
   definitions.py  checks every workflow the editor saves
-  analytics.py    dashboard and analytics numbers, CSV export
-  models.py       Workflow, Execution, ExecutionStep tables
-  seed.py         fictional sample data (safe to run many times)
+  analytics.py    overview numbers from stored reconciliation results
+  assistant.py    rules-based assistant: propose, explain, failure insights
+  schedules.py    schedules and the background scheduler thread
+  runqueue.py     in-memory background run queue with one worker
+  datasources.py  lists, previews and deletes CSV files safely
+  auth.py         password hashing, sessions, login limits
+  models.py       Workflow, Execution, ExecutionStep, ExecutionInput tables
+  tables.py       reading CSV and Excel files, and cleaning amounts, dates and text
+  review.py       approving and rejecting exceptions, with audit entries
+  seed.py         the COD sample files and built-in workflow (safe to run many times)
   templates.py    ready-made workflow templates
+  reconcile.py    the matching logic behind the Compare step
 frontend/src/
-  pages/          Dashboard, Workflows, Builder, Editor, Templates, Executions, Analytics, Upload
+  pages/          Overview, Reconciliations, Builder, Templates, Run history, Audit trail, Assistant, Schedules, Data files, Account
   flow.ts         layout and checks for the flow diagrams and the builder
-  components/     shared UI and the flow diagram
+  components/     shared UI, the flow diagram and the settings form for each step type
 ```
 
 ## Safety choices
@@ -76,38 +101,31 @@ frontend/src/
 
 ## Known limitations
 
-- Runs happen inside the web request, which is fine for small files. A background queue is the next step for long jobs.
-- No login yet, so do not put this on the internet.
+- The background queue lives in memory and has one worker. For many users or very long jobs, use a real job system (for example Celery or RQ with Redis).
+- The audit trail is tamper-resistant inside the app, not against someone who edits the database file directly. Use a real database with restricted permissions for that.
+- Login is for one owner only. Do not put this on the internet without HTTPS.
 - The database has no migration tool yet. Add one (Alembic) before changing tables on real data.
 
 ## Screenshots
 
-**Dashboard.** Automation health, runs per day, week-over-week stat cards and quick actions. Every number is calculated from stored executions.
+**Overview.** The latest reconciliation: match rate, exceptions, amount at risk, what is wrong by type, and exceptions per day.
 
-![Dashboard](docs/screenshots/dashboard.png)
+![Overview](docs/screenshots/overview.png)
 
-**Dashboard, lower half.** Workflow status with success bars, a failure summary, and recent activity.
+**A reconciliation run.** 55 rows matched and 7 exceptions, each with a plain reason. Exceptions can be approved or rejected with a note.
 
-![Dashboard activity](docs/screenshots/dashboard-activity.png)
+![Reconciliation run](docs/screenshots/reconciliation-run.png)
 
-**Workflow library.** Run, edit, enable or disable workflows.
+**Audit trail.** Who decided what, and when. Entries cannot be edited or deleted from the app.
 
-![Workflows](docs/screenshots/workflows.png)
+![Audit trail](docs/screenshots/audit-trail.png)
 
 **Execution log.** Every step of a run, with timing and error messages.
 
 ![Execution log](docs/screenshots/execution-log.png)
 
-**Analytics.** Volume, duration, workflow comparison and failure reasons.
-
-![Analytics](docs/screenshots/analytics.png)
-
 **Drag-and-drop builder.** Drag steps onto the canvas, draw arrows, and edit a box's settings on the right.
 
 ![Builder](docs/screenshots/builder.png)
-
-**Flow of a run.** The diagram colors the path a run took.
-
-![Flow diagram](docs/screenshots/flow-diagram.png)
 
 All data shown is fictional.

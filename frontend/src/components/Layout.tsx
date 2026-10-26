@@ -1,29 +1,31 @@
 import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
+import { useAuth } from "../auth";
 import { useApi } from "../lib";
 import { Icon, type IconName } from "./icons";
 
 const LIVE: { to: string; label: string; icon: IconName; end?: boolean }[] = [
-  { to: "/", label: "Dashboard", icon: "dashboard", end: true },
-  { to: "/workflows", label: "Workflows", icon: "workflow" },
-  { to: "/builder", label: "Builder", icon: "builder" },
-  { to: "/templates", label: "Templates", icon: "templates" },
-  { to: "/executions", label: "Executions", icon: "executions" },
-  { to: "/analytics", label: "Analytics", icon: "analytics" },
-  { to: "/upload", label: "Upload CSV", icon: "upload" },
+  { to: "/", label: "Overview", icon: "dashboard", end: true },
+  { to: "/workflows", label: "Reconciliations", icon: "workflow" },
+  { to: "/executions", label: "Run history", icon: "executions" },
+  { to: "/audit", label: "Audit trail", icon: "check" },
+  { to: "/data-sources", label: "Data files", icon: "database" },
+  { to: "/schedules", label: "Schedules", icon: "clock" },
+  { to: "/assistant", label: "Assistant", icon: "sparkles" },
 ];
-const SOON: { label: string; icon: IconName }[] = [
-  { label: "Data Sources", icon: "database" },
-  { label: "AI Assistant", icon: "sparkles" },
-];
+const SOON: { label: string; icon: IconName }[] = [];
 
 function pageTitle(path: string): string {
-  if (path === "/") return "Dashboard";
+  if (path === "/") return "Overview";
+  if (path.startsWith("/account")) return "Account";
+  if (path.startsWith("/builder")) return "Workflow builder";
+  if (path.startsWith("/templates")) return "Templates";
   const hit = LIVE.filter((l) => l.to !== "/" && path.startsWith(l.to)).sort((a, b) => b.to.length - a.to.length)[0];
   return hit ? hit.label : "AutoFlow Studio";
 }
 
 function Sidebar({ version }: { version?: string }) {
+  const { username, loginEnabled, logout } = useAuth();
   return (
     <div className="flex h-full flex-col">
       <Link to="/" className="flex items-center gap-3 px-5 py-6">
@@ -48,7 +50,7 @@ function Sidebar({ version }: { version?: string }) {
             )}
           </NavLink>
         ))}
-        <p className="px-3 pb-1 pt-6 text-xs font-medium text-slate-500">Planned</p>
+        {SOON.length > 0 && <p className="px-3 pb-1 pt-6 text-xs font-medium text-slate-500">Planned</p>}
         {SOON.map((s) => (
           <span key={s.label} aria-disabled="true" title="Not built yet"
             className="flex cursor-not-allowed items-center gap-3 px-3 py-2.5 text-sm text-slate-500">
@@ -57,6 +59,12 @@ function Sidebar({ version }: { version?: string }) {
           </span>
         ))}
       </nav>
+      {loginEnabled && username && (
+        <div className="mx-3 mb-2 flex items-center justify-between rounded-lg bg-white/5 px-3 py-2 text-sm">
+          <Link to="/account" className="truncate font-medium text-slate-200 hover:text-white" title="Account settings">{username}</Link>
+          <button onClick={logout} className="ml-2 shrink-0 text-xs text-slate-400 hover:text-white">Log out</button>
+        </div>
+      )}
       <p className="px-5 py-4 text-xs text-slate-500">{version ? `Version ${version}` : "Local workspace"}</p>
     </div>
   );
@@ -113,8 +121,8 @@ export default function Layout() {
               <span className={`h-2 w-2 rounded-full ${checking ? "bg-slate-300" : online ? "bg-mint" : "bg-coral"}`} aria-hidden="true" />
               {checking ? "Checking API" : online ? "API online" : "API offline"}
             </span>
-            <Link to="/upload" className="hidden items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:inline-flex">
-              <Icon name="upload" className="h-4 w-4" /> Upload CSV
+            <Link to="/data-sources" className="hidden items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:inline-flex">
+              <Icon name="upload" className="h-4 w-4" /> Add files
             </Link>
             <Link to="/builder" className="inline-flex items-center gap-2 rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-brand-dark">
               <Icon name="plus" className="h-4 w-4" /> New workflow

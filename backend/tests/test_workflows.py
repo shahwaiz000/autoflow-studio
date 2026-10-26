@@ -36,7 +36,7 @@ def test_bad_definitions_are_rejected_with_clear_messages(client):
         return b
     assert client.post("/api/workflows", json=with_step(1, type="python_exec")).status_code == 422
     assert client.post("/api/workflows", json=with_step(1, config={"file": "../../etc/passwd.csv"})).status_code == 422
-    assert client.post("/api/workflows", json=with_step(1, config={"file": "a.csv", "source": "uploads"})).status_code == 422
+    assert client.post("/api/workflows", json=with_step(1, config={"file": "a.csv", "source": "elsewhere"})).status_code == 422  # only samples or uploads
     assert client.post("/api/workflows", json=with_step(3, config={"field": "os.system", "op": ">", "value": 1, "on_true": "s5", "on_false": "s6"})).status_code == 422
     r = client.post("/api/workflows", json=with_step(3, config={"field": "invalid_rows", "op": ">", "value": 1, "on_true": "nope", "on_false": "s6"}))
     assert r.status_code == 422 and "unknown step" in r.json()["error"]["message"]
@@ -48,7 +48,7 @@ def test_update_and_protect_built_in_workflows(client):
     wid = client.post("/api/workflows", json=_body(name="To Edit")).json()["id"]
     r = client.put(f"/api/workflows/{wid}", json=_body(name="Edited", description="new"))
     assert r.status_code == 200 and r.json()["name"] == "Edited"
-    built = client.get("/api/workflows", params={"search": "Employee Onboarding"}).json()[0]
+    built = client.get("/api/workflows", params={"search": "COD Reconciliation"}).json()[0]
     assert built["built_in"] is True
     full = client.get(f"/api/workflows/{built['id']}").json()
     renamed = {"name": "Other name", "steps": full["definition"]["steps"]}

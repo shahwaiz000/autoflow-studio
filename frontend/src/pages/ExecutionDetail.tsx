@@ -1,7 +1,9 @@
 import { Link, useParams } from "react-router-dom";
 import { Card, ErrorBox, Loading, PageHeader, StatusBadge } from "../components/ui";
 import FlowDiagram from "../components/FlowDiagram";
-import { formatDate, formatDuration, useApi } from "../lib";
+import { useEffect } from "react";
+import { formatDate, formatDuration, inProgress, useApi } from "../lib";
+import ExceptionReview from "../components/ExceptionReview";
 import type { Execution, Workflow } from "../types";
 
 function RunDiagram({ ex }: { ex: Execution }) {
@@ -16,16 +18,48 @@ function RunDiagram({ ex }: { ex: Execution }) {
   );
 }
 
+const money = (n: number | null | undefined) => (n == null ? "-" : n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+
+function Reconciliation({ ex }: { ex: Execution }) {
+  const m = ex.result?.metrics ?? {};
+  const raw = ex.result?.details as { comparisons?: Record<string, unknown>[] } | undefined;
+  const d = (raw?.comparisons?.[0] ?? {}) as { left?: string; right?: string; tolerance?: number | null };
+  const tiles: [string, string | number][] = [
+    ["Rows matched", m.matched_rows ?? 0], ["Exceptions", m.exceptions ?? 0], ["Amount differences", m.amount_mismatches ?? 0],
+    ["Missing in " + (d.right ?? "second table"), m.missing_in_right ?? 0], ["Missing in " + (d.left ?? "first table"), m.missing_in_left ?? 0],
+    ["Duplicate keys", m.duplicate_keys ?? 0],
+  ];
+  return (
+    <Card title="Reconciliation" className="mb-4">
+      <p className="mb-3 text-sm text-slate-600">{String(d.left ?? "First table")} compared with {String(d.right ?? "second table")}
+        {d.tolerance != null ? `, allowed difference ${String(d.tolerance)}` : ""}.</p>
+      <dl className="mb-4 grid gap-3 text-sm sm:grid-cols-3 lg:grid-cols-6">
+        {tiles.map(([l, v]) => <div key={l} className="rounded-lg bg-slate-50 p-3"><dt className="text-xs text-slate-500">{l}</dt><dd className="text-lg font-semibold">{v}</dd></div>)}
+      </dl>
+      {(m.unmatched_amount ?? 0) > 0 || (m.amount_difference ?? 0) > 0 ? (
+        <p className="mb-3 text-sm text-slate-600">Total amount difference on mismatches: <b>{money(m.amount_difference)}</b>. Amount of unmatched rows: <b>{money(m.unmatched_amount)}</b>.</p>) : null}
+      <ExceptionReview executionId={ex.id} />
+    </Card>
+  );
+}
+
 export default function ExecutionDetail() {
   const { id } = useParams();
   const { data: ex, error, loading, reload } = useApi<Execution>(`/executions/${id}`);
-  if (loading) return <Loading />;
+  const waiting = !!ex && inProgress(ex.status);
+  useEffect(() => {  // a run that is still waiting or running refreshes itself
+    if (!waiting) return;
+    const t = window.setInterval(reload, 1000);
+    return () => window.clearInterval(t);
+  }, [waiting, reload]);
+  const reconciled = !!ex?.result && !!ex.steps?.some((s) => s.step_type === "compare");
+  if (loading && !ex) return <Loading />;
   if (error || !ex) return <ErrorBox message={error ?? "Not found"} retry={reload} />;
   return (
     <>
       <Link to="/executions" className="mb-3 inline-block text-sm text-brand-dark hover:underline">Back to executions</Link>
       <PageHeader title={`Execution #${ex.id}`} subtitle={ex.workflow_name}><StatusBadge status={ex.status} /></PageHeader>
-      {ex.is_demo && <p className="mb-4 rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-600">This is a seeded demo execution (fictional). Its step log is illustrative.</p>}
+      {waiting && <p role="status" className="mb-4 rounded-lg bg-sun-soft px-4 py-2 text-sm text-sun-dark">{ex.status === "queued" ? "This run is waiting in the queue." : "This run is in progress."} The page updates by itself.</p>}
       <Card className="mb-4">
         <dl className="grid gap-4 text-sm sm:grid-cols-4">
           <div><dt className="text-slate-500">Started</dt><dd className="font-medium">{formatDate(ex.started_at)}</dd></div>
@@ -35,6 +69,25 @@ export default function ExecutionDetail() {
         </dl>
         {ex.error_message && <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-800">{ex.error_message}</p>}
       </Card>
+      {!!ex.inputs?.length && (
+        <Card title="Files used in this run" className="mb-4">
+          <ul className="space-y-1 text-sm">{ex.inputs.map((i) => <li key={i.name}><span className="font-medium">{i.name}:</span> {i.file} <span className="text-slate-500">({i.source === "samples" ? "sample file" : "your upload"})</span></li>)}</ul>
+        </Card>
+      )}
+      {ex.status === "success" && ex.steps?.some((s) => s.step_type === "report" && s.status === "success") && (
+        <Card title="Download" className="mb-4">
+          <div className="flex flex-wrap gap-2 text-sm">
+            <a className="rounded-lg bg-brand px-3 py-1.5 font-medium text-white hover:bg-brand-dark" href={`/api/executions/${ex.id}/download/report`}>Excel report</a>
+            {reconciled ? (
+              (ex.result?.metrics.exceptions ?? 0) > 0 && <a className="rounded-lg border border-slate-300 px-3 py-1.5 hover:bg-slate-50" href={`/api/executions/${ex.id}/download/exceptions`}>Exceptions (CSV)</a>
+            ) : (<>
+              <a className="rounded-lg border border-slate-300 px-3 py-1.5 hover:bg-slate-50" href={`/api/executions/${ex.id}/download/processed`}>Cleaned data (CSV)</a>
+              <a className="rounded-lg border border-slate-300 px-3 py-1.5 hover:bg-slate-50" href={`/api/executions/${ex.id}/download/summary`}>Column summary (CSV)</a>
+            </>)}
+          </div>
+        </Card>
+      )}
+      {reconciled && <Reconciliation ex={ex} />}
       <RunDiagram ex={ex} />
       <Card title="Step log">
         <ol className="space-y-3">

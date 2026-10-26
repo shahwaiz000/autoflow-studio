@@ -45,9 +45,19 @@ def test_unsupported_step_type_rejected():
     assert any("unsupported type" in e for e in errs)
 
 
-def test_seed_is_idempotent(client):
+def test_seed_is_idempotent_and_clears_old_demo_material(client):
+    from app.models import Execution
+    from app.seed import remove_legacy_demo
     with SessionLocal() as db:
-        before = db.query(Workflow).count()
+        remove_legacy_demo(db)  # the old demo workflows (used here only as test fixtures) go because nobody used them
+        names = {w.name for w in db.query(Workflow).all()}
+        assert "COD Reconciliation" in names
+        count = db.query(Workflow).count()
         seed(db)
         seed(db)
-        assert db.query(Workflow).count() == before
+        assert db.query(Workflow).count() == count
+        assert db.query(Execution).filter_by(is_demo=True).count() == 0
+        from tests.fixture_files import add_test_workflows, make_test_files
+        from app.config import settings
+        add_test_workflows(db)  # put the fixtures back for the tests that follow
+        make_test_files(settings.samples_dir)

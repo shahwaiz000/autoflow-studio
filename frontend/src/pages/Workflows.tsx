@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Card, Empty, ErrorBox, Loading, PageHeader, StatusBadge } from "../components/ui";
-import { api, useApi } from "../lib";
-import type { Execution, Workflow } from "../types";
+import RunPanel from "../components/RunPanel";
+import { api, useApi, waitForRun } from "../lib";
+import type { Execution, RunInput, Workflow } from "../types";
 
 function Steps({ id }: { id: number }) {
   const { data, error } = useApi<Workflow>(`/workflows/${id}`);
@@ -23,14 +24,20 @@ export default function Workflows() {
   const [filter, setFilter] = useState("");
   const [open, setOpen] = useState<number | null>(null);
   const [busy, setBusy] = useState<number | null>(null);
+  const [choosing, setChoosing] = useState<number | null>(null);
   const [result, setResult] = useState<{ ok: boolean; text: string; id?: number } | null>(null);
   const qs = new URLSearchParams({ search, ...(filter ? { enabled: filter } : {}) }).toString();
   const { data, error, loading, reload } = useApi<Workflow[]>(`/workflows?${qs}`);
 
-  async function run(w: Workflow) {
-    setBusy(w.id); setResult(null);
+  async function run(w: Workflow, inputs?: Record<string, Pick<RunInput, "source" | "file">>) {
+    setBusy(w.id); setResult(null); setChoosing(null);
     try {
-      const ex = await api<Execution>(`/workflows/${w.id}/run`, { method: "POST" });
+      // The run goes to the background queue, so the page never freezes; we then watch it until it ends.
+      const queued = await api<Execution>(`/workflows/${w.id}/run?background=true`, { method: "POST", ...(inputs ? { body: JSON.stringify({ inputs }) } : {}) });
+      setResult({ ok: true, id: queued.id, text: `${w.name} is waiting in the queue` });
+      const ex = await waitForRun(queued.id, (e) => {
+        if (e.status === "running") setResult({ ok: true, id: e.id, text: `${w.name} is running` });
+      });
       setResult({ ok: ex.status === "success", id: ex.id, text: `${w.name} ${ex.status}${ex.error_message ? `: ${ex.error_message}` : ""}` });
       reload();
     } catch (e) { setResult({ ok: false, text: (e as Error).message }); }
@@ -49,9 +56,10 @@ export default function Workflows() {
 
   return (
     <>
-      <PageHeader title="Workflows" subtitle="Run a workflow to execute it on the backend and record the result.">
+      <PageHeader title="Reconciliations" subtitle="Each one is a saved workflow. Run it on the files you choose, or start from the COD Reconciliation template.">
         <div className="flex flex-wrap gap-2">
-          <Link to="/builder" className="rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand-dark">Create workflow</Link>
+          <Link to="/templates" className="rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand-dark">Start from a template</Link>
+          <Link to="/builder" className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50">Build your own</Link>
           <input aria-label="Search workflows" placeholder="Search workflows" value={search} onChange={(e) => setSearch(e.target.value)}
             className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
           <select aria-label="Filter by status" value={filter} onChange={(e) => setFilter(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
@@ -79,7 +87,7 @@ export default function Workflows() {
               </div>
               <p className="mt-2 text-sm text-slate-600">{w.description}</p>
               <div className="mt-4 flex items-center gap-2">
-                <button onClick={() => run(w)} disabled={!w.enabled || busy === w.id}
+                <button onClick={() => (w.inputs?.length ? setChoosing(choosing === w.id ? null : w.id) : run(w))} disabled={!w.enabled || busy === w.id}
                   className="rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-50">
                   {busy === w.id ? "Running..." : "Run workflow"}
                 </button>
@@ -90,6 +98,7 @@ export default function Workflows() {
                   {open === w.id ? "Hide steps" : "View steps"}
                 </button>
               </div>
+              {choosing === w.id && w.inputs && <RunPanel inputs={w.inputs} onRun={(chosen) => run(w, chosen)} onCancel={() => setChoosing(null)} />}
               {open === w.id && <Steps id={w.id} />}
             </Card>
           ))}

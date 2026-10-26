@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, event, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
@@ -40,7 +40,7 @@ class Execution(Base):
     __tablename__ = "executions"
     id: Mapped[int] = mapped_column(primary_key=True)
     workflow_id: Mapped[int] = mapped_column(ForeignKey("workflows.id"))
-    status: Mapped[str] = mapped_column(String(20), default="running")  # running|success|failed
+    status: Mapped[str] = mapped_column(String(20), default="running")  # queued|running|success|failed
     trigger_type: Mapped[str] = mapped_column(String(20), default="manual")
     started_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -50,6 +50,11 @@ class Execution(Base):
     workflow: Mapped[Workflow] = relationship(back_populates="executions")
     steps: Mapped[list["ExecutionStep"]] = relationship(
         back_populates="execution", order_by="ExecutionStep.position", cascade="all, delete-orphan")
+    inputs: Mapped[list["ExecutionInput"]] = relationship(
+        back_populates="execution", order_by="ExecutionInput.id", cascade="all, delete-orphan")
+    exceptions: Mapped[list["ExecutionException"]] = relationship(
+        back_populates="execution", order_by="ExecutionException.id", cascade="all, delete-orphan")
+    result: Mapped["ExecutionResult | None"] = relationship(back_populates="execution", uselist=False, cascade="all, delete-orphan")
 
     def to_dict(self, with_steps: bool = False) -> dict:
         d = {
@@ -58,9 +63,11 @@ class Execution(Base):
             "started_at": iso(self.started_at), "finished_at": iso(self.finished_at),
             "duration_seconds": self.duration_seconds, "error_message": self.error_message,
             "is_demo": self.is_demo,
+            "inputs": [i.to_dict() for i in self.inputs],
         }
         if with_steps:
             d["steps"] = [s.to_dict() for s in self.steps]
+            d["result"] = self.result.to_dict() if self.result else None
         return d
 
 
@@ -84,3 +91,145 @@ class ExecutionStep(Base):
             "name": self.name, "status": self.status, "attempts": self.attempts,
             "message": self.message, "duration_ms": self.duration_ms,
         }
+
+
+class Schedule(Base):
+    """Run a workflow automatically. Times are stored in UTC; tz_offset_minutes only
+    says which clock the person meant (for example +180 for Jeddah)."""
+    __tablename__ = "schedules"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    workflow_id: Mapped[int] = mapped_column(ForeignKey("workflows.id"))
+    kind: Mapped[str] = mapped_column(String(10))  # interval | daily | weekly
+    interval_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    time_of_day: Mapped[str | None] = mapped_column(String(5), nullable=True)  # "HH:MM" on the person's clock
+    weekday: Mapped[int | None] = mapped_column(Integer, nullable=True)  # 0 = Monday
+    tz_offset_minutes: Mapped[int] = mapped_column(Integer, default=0)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    next_run_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_status: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    last_execution_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    workflow: Mapped[Workflow] = relationship()
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id, "workflow_id": self.workflow_id, "workflow_name": self.workflow.name,
+            "workflow_enabled": self.workflow.enabled, "kind": self.kind,
+            "interval_minutes": self.interval_minutes, "time_of_day": self.time_of_day,
+            "weekday": self.weekday, "tz_offset_minutes": self.tz_offset_minutes,
+            "enabled": self.enabled, "next_run_at": iso(self.next_run_at),
+            "last_run_at": iso(self.last_run_at), "last_status": self.last_status,
+            "last_execution_id": self.last_execution_id, "created_at": iso(self.created_at),
+        }
+
+
+class DataFile(Base):
+    """Remembers the original name of each uploaded CSV (it is stored under a random name)."""
+    __tablename__ = "data_files"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    stored_name: Mapped[str] = mapped_column(String(80), unique=True)
+    original_name: Mapped[str] = mapped_column(String(100))
+    execution_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class User(Base):
+    __tablename__ = "users"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    username: Mapped[str] = mapped_column(String(40), unique=True)
+    password_hash: Mapped[str] = mapped_column(String(200))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class LoginSession(Base):
+    """Only a hash of the session token is stored, so a copy of the database cannot be used to log in."""
+    __tablename__ = "login_sessions"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    user: Mapped[User] = relationship()
+
+
+class ExecutionInput(Base):
+    """The files a run was told to use. Kept so every result can be traced to its source data.
+    (A separate table, so existing databases keep working without a migration.)"""
+    __tablename__ = "execution_inputs"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    execution_id: Mapped[int] = mapped_column(ForeignKey("executions.id"))
+    name: Mapped[str] = mapped_column(String(40))
+    source: Mapped[str] = mapped_column(String(10))  # samples | uploads
+    file: Mapped[str] = mapped_column(String(100))
+    execution: Mapped[Execution] = relationship(back_populates="inputs")
+
+    def to_dict(self) -> dict:
+        return {"name": self.name, "source": self.source, "file": self.file}
+
+
+class ExecutionResult(Base):
+    """The numbers and facts a run produced (rows loaded, matched, exceptions...), kept after the run ends."""
+    __tablename__ = "execution_results"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    execution_id: Mapped[int] = mapped_column(ForeignKey("executions.id"), unique=True)
+    metrics: Mapped[dict] = mapped_column(JSON, default=dict)
+    details: Mapped[dict] = mapped_column(JSON, default=dict)
+    execution: Mapped[Execution] = relationship(back_populates="result")
+
+    def to_dict(self) -> dict:
+        return {"metrics": self.metrics, "details": self.details}
+
+
+class ExecutionException(Base):
+    """One thing a reconciliation found that does not agree, with the reason in plain words.
+    The decision columns are filled when a person reviews it."""
+    __tablename__ = "execution_exceptions"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    execution_id: Mapped[int] = mapped_column(ForeignKey("executions.id"))
+    kind: Mapped[str] = mapped_column(String(30))
+    key: Mapped[str] = mapped_column(String(120), default="")
+    left_row: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    right_row: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    left_amount: Mapped[float | None] = mapped_column(Float, nullable=True)
+    right_amount: Mapped[float | None] = mapped_column(Float, nullable=True)
+    difference: Mapped[float | None] = mapped_column(Float, nullable=True)
+    reason: Mapped[str] = mapped_column(Text, default="")
+    decision: Mapped[str | None] = mapped_column(String(20), nullable=True)   # approved | rejected
+    decided_by: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    note: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    execution: Mapped[Execution] = relationship(back_populates="exceptions")
+
+    def to_dict(self) -> dict:
+        return {"id": self.id, "kind": self.kind, "key": self.key, "left_row": self.left_row, "right_row": self.right_row,
+                "left_amount": self.left_amount, "right_amount": self.right_amount, "difference": self.difference,
+                "reason": self.reason, "decision": self.decision, "decided_by": self.decided_by,
+                "decided_at": iso(self.decided_at), "note": self.note}
+
+
+class AuditEvent(Base):
+    """One thing a person did, recorded when it happened. The app can add rows but never change or delete them."""
+    __tablename__ = "audit_events"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    actor: Mapped[str] = mapped_column(String(40))
+    action: Mapped[str] = mapped_column(String(30))  # approved | rejected | reopened
+    execution_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    exception_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    key: Mapped[str] = mapped_column(String(120), default="")
+    detail: Mapped[str] = mapped_column(String(400), default="")
+
+    def to_dict(self) -> dict:
+        return {"id": self.id, "at": iso(self.at), "actor": self.actor, "action": self.action, "execution_id": self.execution_id,
+                "exception_id": self.exception_id, "key": self.key, "detail": self.detail}
+
+
+@event.listens_for(AuditEvent, "before_update")
+def _no_edits(*_):
+    raise ValueError("The audit trail cannot be changed")
+
+
+@event.listens_for(AuditEvent, "before_delete")
+def _no_deletes(*_):
+    raise ValueError("The audit trail cannot be changed")

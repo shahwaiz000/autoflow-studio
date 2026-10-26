@@ -10,7 +10,7 @@ import { ErrorBox, Loading } from "../components/ui";
 import { branchShifts, checkGraph, explicitEdges, layout, withExplicitNext } from "../flow";
 import { api, useApi } from "../lib";
 import type { Workflow } from "../types";
-import { DEFAULTS, EStep, Fields, TYPES } from "./WorkflowEditor";
+import { DEFAULTS, EStep, Fields, TYPES } from "../components/StepFields";
 
 type StepNode = Node<{ stepId: string }, "step">;
 const Ctx = createContext<{ steps: Map<string, EStep>; problems: Set<string> }>({ steps: new Map(), problems: new Set() });
@@ -153,7 +153,6 @@ function Canvas() {
     <Ctx.Provider value={{ steps: stepMap, problems: check.ids }}>
       <div className="mb-3 flex flex-wrap items-end gap-3 text-sm">
         <Link to="/workflows" className="text-brand-dark hover:underline">Back to workflows</Link>
-        <Link to={id ? `/workflows/${id}/edit` : "/workflows/new"} className="text-brand-dark hover:underline">Prefer a form? Use the form editor</Link>
       </div>
       <div className="mb-3 grid gap-3 text-sm sm:grid-cols-[1fr_180px_2fr_auto]">
         <label>Name<input className={field} value={name} disabled={builtIn} maxLength={120} onChange={(e) => setName(e.target.value)} /></label>
