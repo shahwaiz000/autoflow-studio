@@ -31,7 +31,7 @@ export function HealthRing({ success, failed }: { success: number; failed: numbe
           <p className="px-6 text-xs text-slate-400">No finished runs yet</p>
         ) : (
           <div>
-            <p className="num text-3xl font-semibold text-white">{rate}%</p>
+            <p className="num text-2xl font-semibold text-white">{rate}%</p>
             <p className="text-xs text-slate-400">success rate</p>
           </div>
         )}

@@ -56,7 +56,7 @@ export default function Dashboard() {
 
       {/* Run health: the main view of how automation is doing */}
       <section aria-label="Run health" className="overflow-hidden rounded-2xl bg-navy-900 text-white shadow-lift">
-        <div className="grid gap-8 p-6 lg:grid-cols-[auto_minmax(0,1fr)_17rem] lg:items-center lg:p-8">
+        <div className="grid gap-8 p-6 lg:grid-cols-[auto_minmax(0,1fr)_18rem] lg:items-center lg:p-8">
           <div className="flex items-center gap-6">
             <HealthRing success={t.successful} failed={t.failed} />
             <div className="min-w-0">
@@ -89,7 +89,7 @@ export default function Dashboard() {
               <ResponsiveContainer>
                 <BarChart data={data.trend.slice(-range).map((d) => ({ ...d, day: dayLabel(d.date) }))} barCategoryGap="22%">
                   <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.08)" />
-                  <XAxis dataKey="day" tickLine={false} axisLine={false} fontSize={11} tick={{ fill: "#94a3b8" }} interval={range === 7 ? 0 : 1} />
+                  <XAxis dataKey="day" tickLine={false} axisLine={false} fontSize={11} tick={{ fill: "#94a3b8" }} interval={range === 7 ? 0 : 2} />
                   <YAxis allowDecimals={false} tickLine={false} axisLine={false} fontSize={11} width={24} tick={{ fill: "#94a3b8" }} />
                   <Tooltip content={<ChartTip />} cursor={{ fill: "rgba(255,255,255,0.06)" }} />
                   <Bar dataKey="success" name="Successful" stackId="r" fill="#14b88a" />
@@ -112,10 +112,10 @@ export default function Dashboard() {
               <Icon name="play" className="h-4 w-4" /> {busy !== null && busy === chosen ? "Running..." : "Run now"}
             </button>
             <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-              <Link to="/upload" className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/15 px-3 py-2 text-slate-200 hover:bg-white/10">
+              <Link to="/upload" className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-white/15 px-2 py-2 text-slate-200 hover:bg-white/10">
                 <Icon name="upload" className="h-4 w-4" /> Upload CSV
               </Link>
-              <Link to="/templates" className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/15 px-3 py-2 text-slate-200 hover:bg-white/10">
+              <Link to="/templates" className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-white/15 px-2 py-2 text-slate-200 hover:bg-white/10">
                 <Icon name="templates" className="h-4 w-4" /> Templates
               </Link>
             </div>
