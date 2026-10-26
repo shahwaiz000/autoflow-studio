@@ -29,11 +29,11 @@ Finance and operations teams spend hours every day checking one list against ano
 - **Template and visual builder.** Start from the COD Reconciliation template, or draw your own with drag and drop. A drawing is checked before saving. Only a fixed list of step types can run, so no user-written code is executed.
 - **Assistant (rules-based, not an AI model).** Describe a reconciliation in plain English and get a proposed workflow with the reason for each step. It can also explain a workflow and summarise why runs failed. It is free and works offline.
 - **Login.** One owner account, scrypt password hashing, HttpOnly session cookie, lockout after five wrong passwords, origin check on changes.
-- **Tests.** 149 backend tests (pytest) and 67 frontend tests (Vitest).
+- **Tests.** 161 backend tests (pytest) and 74 frontend tests (Vitest).
 
 ## Not built yet
 
-Reviewing and approving exceptions with an audit trail (next), many-to-one matching (one deposit covering many parcels), anomaly flags, emailed notifications, folder watching, multiple users and roles, a language-model assistant. The old .xls format is not supported.
+A workflow step that pauses a run until someone approves it (review happens after the run, on its page), many-to-one matching (one deposit covering many parcels), anomaly flags, emailed notifications, folder watching, multiple users and roles, a language-model assistant. The old .xls format is not supported.
 
 ## Sample data
 
@@ -82,11 +82,12 @@ backend/app/
   auth.py         password hashing, sessions, login limits
   models.py       Workflow, Execution, ExecutionStep, ExecutionInput tables
   tables.py       reading CSV and Excel files, and cleaning amounts, dates and text
+  review.py       approving and rejecting exceptions, with audit entries
   seed.py         the COD sample files and built-in workflow (safe to run many times)
   templates.py    ready-made workflow templates
   reconcile.py    the matching logic behind the Compare step
 frontend/src/
-  pages/          Overview, Reconciliations, Builder, Templates, Run history, Assistant, Schedules, Data files, Account
+  pages/          Overview, Reconciliations, Builder, Templates, Run history, Audit trail, Assistant, Schedules, Data files, Account
   flow.ts         layout and checks for the flow diagrams and the builder
   components/     shared UI, the flow diagram and the settings form for each step type
 ```
@@ -101,6 +102,7 @@ frontend/src/
 ## Known limitations
 
 - The background queue lives in memory and has one worker. For many users or very long jobs, use a real job system (for example Celery or RQ with Redis).
+- The audit trail is tamper-resistant inside the app, not against someone who edits the database file directly. Use a real database with restricted permissions for that.
 - Login is for one owner only. Do not put this on the internet without HTTPS.
 - The database has no migration tool yet. Add one (Alembic) before changing tables on real data.
 

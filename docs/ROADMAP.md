@@ -91,7 +91,7 @@ Ordered by what unlocks the next thing.
 - A **Reconciliation** template.
 - *Why:* this is the feature that makes the project about you and your job.
 
-### Phase 3: Review, approval and audit
+### Phase 3: Review, approval and audit (review page and audit trail done; a pausing Approval step is not)
 - A **Review** page for exceptions: approve, reject, add a note.
 - An **Approval** step: the run waits, then continues or stops.
 - An **audit trail** table that cannot be edited from the app.
