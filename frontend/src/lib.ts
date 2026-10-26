@@ -35,6 +35,47 @@ export function formatDuration(seconds: number | null | undefined): string {
 export const formatDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "-";
 
+type Day = { success: number; failed: number };
+
+/** Totals for the latest `size` days and for the `size` days before them. */
+export function comparePeriods(trend: Day[], size = 7) {
+  const sum = (days: Day[]) => ({
+    success: days.reduce((a, d) => a + d.success, 0),
+    failed: days.reduce((a, d) => a + d.failed, 0),
+  });
+  const current = sum(trend.slice(-size));
+  const previous = sum(trend.slice(-size * 2, -size));
+  return { current, previous };
+}
+
+/** Percent change from previous to current. Returns null when there is nothing to compare with. */
+export function pctChange(current: number, previous: number): number | null {
+  if (previous === 0) return null;
+  return Math.round(((current - previous) / previous) * 100);
+}
+
+export function timeAgo(iso: string | null, now: number = Date.now()): string {
+  if (!iso) return "-";
+  const s = Math.max(0, Math.round((now - new Date(iso).getTime()) / 1000));
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
+  return `${Math.floor(s / 86400)} d ago`;
+}
+
+/** Estimated time saved. Only calculated from a figure the user typed in; never from a guess. */
+export function estimateSavedMinutes(successfulRuns: number, minutesPerRun: number | null): number | null {
+  if (minutesPerRun == null || !Number.isFinite(minutesPerRun) || minutesPerRun <= 0) return null;
+  return successfulRuns * minutesPerRun;
+}
+
+export function formatMinutes(total: number): string {
+  if (total < 60) return `${Math.round(total)} min`;
+  const h = Math.floor(total / 60);
+  const m = Math.round(total % 60);
+  return m ? `${h} h ${m} min` : `${h} h`;
+}
+
 export async function uploadCsv<T>(form: FormData): Promise<T> {
   let res: Response;
   try {

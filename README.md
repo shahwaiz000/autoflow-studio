@@ -6,7 +6,7 @@ A business workflow automation platform. You build workflows from simple steps, 
 
 ## What works today
 
-- **Dashboard.** Totals, success rate, average duration, a 14-day trend, recent runs and failure reasons, all calculated from the database.
+- **Dashboard.** An automation health view (success ring, runs per day), week-over-week stat cards, average run time per day, a failure summary, workflow status with success bars, recent activity, and quick actions to run a workflow or upload a CSV. All numbers come from the database. "Estimated time saved" is only calculated from a manual time per run that you type in; nothing is assumed.
 - **Workflow library.** Search, filter, enable or disable, view steps, and run a workflow. Running starts real processing on the backend.
 - **Drag-and-drop builder.** Drag steps onto a canvas, draw arrows between them, click a box to change its settings, and save. A drawing is checked before saving (one Trigger, no loose ends). Built with React Flow (MIT license).
 - **Form editor.** The same workflows can also be edited with a plain form. Add steps, reorder them, set retries, and branch with an if/else condition.
@@ -16,7 +16,7 @@ A business workflow automation platform. You build workflows from simple steps, 
 - **Execution history.** Every run with status, duration, trigger, error message and a step-by-step log.
 - **CSV upload and cleaning.** Upload a CSV (max 5 MB). The app finds missing values, duplicates and text where numbers should be, cleans the file, and offers the cleaned file and a summary for download.
 - **Analytics.** Volume and duration charts, workflow comparison, common failure reasons, and a CSV export. A filter separates seeded demo data from your own runs.
-- **Tests.** 37 backend tests (pytest) and 14 frontend tests (Vitest).
+- **Tests.** 37 backend tests (pytest) and 23 frontend tests (Vitest).
 
 ## Not built yet
 
