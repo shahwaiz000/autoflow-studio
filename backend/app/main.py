@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from . import analytics, assistant, schedules
+from . import analytics, assistant, datasources, schedules
 from .config import settings
 from .database import Base, SessionLocal, engine, get_db
 from .engine import run_workflow
@@ -196,6 +196,7 @@ async def upload_csv(file: UploadFile = File(...), required_columns: str = Form(
         {"id": "end", "type": "end", "name": "Done", "config": {}},
     ]}
     ex = run_workflow(db, wf, "upload", definition=definition)
+    datasources.remember_upload(db, stored, original, ex.id)
     return {**ex.to_dict(with_steps=True), "metrics": getattr(ex, "result_metrics", {})}
 
 
@@ -399,3 +400,25 @@ def delete_schedule(sid: int, db: Session = Depends(get_db)):
 def schedules_run_due(db: Session = Depends(get_db)):
     """Run anything that is due right now (the background thread does this on its own)."""
     return {"ran": schedules.run_due(db)}
+
+
+@app.get("/api/datasources")
+def list_datasources(db: Session = Depends(get_db)):
+    return datasources.catalog(db)
+
+
+@app.get("/api/datasources/{source}/{name}/preview")
+def preview_datasource(source: str, name: str, rows: int = Query(10, ge=1, le=datasources.PREVIEW_MAX)):
+    d = datasources.preview(source, name, rows)
+    if d is None:
+        raise HTTPException(404, "File not found")
+    return d
+
+
+@app.delete("/api/datasources/{source}/{name}")
+def delete_datasource(source: str, name: str, db: Session = Depends(get_db)):
+    if source == "samples":
+        raise HTTPException(409, "Built-in sample files cannot be deleted")
+    if not datasources.delete_upload(db, name):
+        raise HTTPException(404, "File not found")
+    return {"deleted": True}

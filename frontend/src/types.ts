@@ -75,3 +75,11 @@ export interface Schedule {
   next_run_at: string | null; last_run_at: string | null; last_status: string | null; last_execution_id: number | null;
 }
 export interface SchedulerStatus { running: boolean; checks_every_seconds: number; last_check: string | null; active: number; note: string }
+
+export interface DataFile {
+  name: string; source: "samples" | "uploads"; rows: number | null; columns: string[]; readable: boolean;
+  size_bytes: number; modified_at: string | null; used_by: string[];
+  original_name?: string | null; uploaded_at?: string | null; execution_id?: number | null;
+}
+export interface DataCatalog { samples: DataFile[]; uploads: DataFile[] }
+export interface DataPreview { name: string; readable: boolean; columns: string[]; rows: string[][] }

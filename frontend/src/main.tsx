@@ -14,6 +14,7 @@ import Upload from "./pages/Upload";
 import ExecutionDetail from "./pages/ExecutionDetail";
 import Assistant from "./pages/Assistant";
 import Schedules from "./pages/Schedules";
+import DataSources from "./pages/DataSources";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
@@ -32,6 +33,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <Route path="upload" element={<Upload />} />
           <Route path="assistant" element={<Assistant />} />
           <Route path="schedules" element={<Schedules />} />
+          <Route path="data-sources" element={<DataSources />} />
           <Route path="executions/:id" element={<ExecutionDetail />} />
         </Route>
       </Routes>

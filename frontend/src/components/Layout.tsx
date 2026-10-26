@@ -12,11 +12,10 @@ const LIVE: { to: string; label: string; icon: IconName; end?: boolean }[] = [
   { to: "/analytics", label: "Analytics", icon: "analytics" },
   { to: "/upload", label: "Upload CSV", icon: "upload" },
   { to: "/schedules", label: "Schedules", icon: "clock" },
+  { to: "/data-sources", label: "Data Sources", icon: "database" },
   { to: "/assistant", label: "Assistant", icon: "sparkles" },
 ];
-const SOON: { label: string; icon: IconName }[] = [
-  { label: "Data Sources", icon: "database" },
-];
+const SOON: { label: string; icon: IconName }[] = [];
 
 function pageTitle(path: string): string {
   if (path === "/") return "Dashboard";
@@ -49,7 +48,7 @@ function Sidebar({ version }: { version?: string }) {
             )}
           </NavLink>
         ))}
-        <p className="px-3 pb-1 pt-6 text-xs font-medium text-slate-500">Planned</p>
+        {SOON.length > 0 && <p className="px-3 pb-1 pt-6 text-xs font-medium text-slate-500">Planned</p>}
         {SOON.map((s) => (
           <span key={s.label} aria-disabled="true" title="Not built yet"
             className="flex cursor-not-allowed items-center gap-3 px-3 py-2.5 text-sm text-slate-500">

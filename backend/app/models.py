@@ -115,3 +115,13 @@ class Schedule(Base):
             "last_run_at": iso(self.last_run_at), "last_status": self.last_status,
             "last_execution_id": self.last_execution_id, "created_at": iso(self.created_at),
         }
+
+
+class DataFile(Base):
+    """Remembers the original name of each uploaded CSV (it is stored under a random name)."""
+    __tablename__ = "data_files"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    stored_name: Mapped[str] = mapped_column(String(80), unique=True)
+    original_name: Mapped[str] = mapped_column(String(100))
+    execution_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
