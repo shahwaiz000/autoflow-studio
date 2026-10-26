@@ -15,10 +15,13 @@ import ExecutionDetail from "./pages/ExecutionDetail";
 import Assistant from "./pages/Assistant";
 import Schedules from "./pages/Schedules";
 import DataSources from "./pages/DataSources";
+import Account from "./pages/Account";
+import { AuthGate } from "./auth";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <BrowserRouter>
+      <AuthGate>
       <Routes>
         <Route element={<Layout />}>
           <Route index element={<Dashboard />} />
@@ -34,9 +37,11 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <Route path="assistant" element={<Assistant />} />
           <Route path="schedules" element={<Schedules />} />
           <Route path="data-sources" element={<DataSources />} />
+          <Route path="account" element={<Account />} />
           <Route path="executions/:id" element={<ExecutionDetail />} />
         </Route>
       </Routes>
+      </AuthGate>
     </BrowserRouter>
   </React.StrictMode>,
 );

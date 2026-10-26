@@ -10,11 +10,11 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from . import analytics, assistant, datasources, schedules
+from . import analytics, assistant, auth, datasources, schedules
 from .config import settings
 from .database import Base, SessionLocal, engine, get_db
 from .engine import run_workflow
-from .models import Execution, Schedule, Workflow, iso, utcnow
+from .models import Execution, Schedule, User, Workflow, iso, utcnow
 from .definitions import clean_definition
 from .seed import WORKFLOWS, seed
 from .templates import TEMPLATES
@@ -43,6 +43,29 @@ app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins.split(","
 
 def _err(status: int, code: str, message: str):
     return JSONResponse(status_code=status, content={"error": {"code": code, "message": message}})
+
+
+OPEN_PATHS = ("/api/health", "/api/auth/")
+SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
+
+
+@app.middleware("http")
+async def require_login(request: Request, call_next):
+    path = request.url.path
+    if not settings.auth_enabled or not path.startswith("/api/") or request.method == "OPTIONS":
+        return await call_next(request)
+    if request.method not in SAFE_METHODS:  # a page on another site must not be able to act for the person
+        origin = request.headers.get("origin")
+        allowed = settings.cors_origins.split(",")
+        if origin and origin not in allowed and origin.split("://")[-1] != request.headers.get("host"):
+            return _err(403, "bad_origin", "This request came from an unknown website")
+    if any(path.startswith(p) for p in OPEN_PATHS):
+        return await call_next(request)
+    with SessionLocal() as db:
+        user = auth.user_for(db, request.cookies.get(auth.COOKIE))
+    if not user:
+        return _err(401, "not_logged_in", "Please log in")
+    return await call_next(request)
 
 
 @app.exception_handler(HTTPException)
@@ -422,3 +445,81 @@ def delete_datasource(source: str, name: str, db: Session = Depends(get_db)):
     if not datasources.delete_upload(db, name):
         raise HTTPException(404, "File not found")
     return {"deleted": True}
+
+
+class Credentials(BaseModel):
+    username: str = Field(max_length=40)
+    password: str = Field(max_length=auth.MAX_PASSWORD)
+
+
+class PasswordChange(BaseModel):
+    current_password: str = Field(max_length=auth.MAX_PASSWORD)
+    new_password: str = Field(max_length=auth.MAX_PASSWORD)
+
+
+def _set_cookie(resp: JSONResponse, token: str):
+    resp.set_cookie(auth.COOKIE, token, max_age=settings.session_days * 86400, httponly=True,
+                    samesite="lax", secure=settings.auth_cookie_secure, path="/")
+
+
+@app.get("/api/auth/status")
+def auth_status(request: Request, db: Session = Depends(get_db)):
+    user = auth.user_for(db, request.cookies.get(auth.COOKIE)) if settings.auth_enabled else None
+    return {"auth_enabled": settings.auth_enabled, "needs_setup": settings.auth_enabled and db.query(User).count() == 0,
+            "user": {"username": user.username} if user else None}
+
+
+@app.post("/api/auth/setup", status_code=201)
+def auth_setup(body: Credentials, db: Session = Depends(get_db)):
+    if not settings.auth_enabled:
+        raise HTTPException(409, "Login is turned off for this server")
+    if db.query(User).count():
+        raise HTTPException(409, "An account already exists. Please log in")
+    problem = auth.check_username(body.username) or auth.check_password_rules(body.password)
+    if problem:
+        raise HTTPException(422, problem)
+    user = User(username=body.username, password_hash=auth.hash_password(body.password))
+    db.add(user)
+    db.commit()
+    resp = JSONResponse(status_code=201, content={"user": {"username": user.username}})
+    _set_cookie(resp, auth.start_session(db, user))
+    return resp
+
+
+@app.post("/api/auth/login")
+def auth_login(body: Credentials, db: Session = Depends(get_db)):
+    if auth.locked(body.username):
+        raise HTTPException(429, "Too many wrong attempts. Wait 10 minutes and try again")
+    user = auth.login_ok(db, body.username, body.password)
+    if not user:
+        auth.record_fail(body.username)
+        raise HTTPException(401, "Wrong username or password")
+    auth.clear_fails(body.username)
+    resp = JSONResponse(content={"user": {"username": user.username}})
+    _set_cookie(resp, auth.start_session(db, user))
+    return resp
+
+
+@app.post("/api/auth/logout")
+def auth_logout(request: Request, db: Session = Depends(get_db)):
+    auth.end_session(db, request.cookies.get(auth.COOKIE))
+    resp = JSONResponse(content={"logged_out": True})
+    resp.delete_cookie(auth.COOKIE, path="/")
+    return resp
+
+
+@app.post("/api/auth/password")
+def auth_password(body: PasswordChange, request: Request, db: Session = Depends(get_db)):
+    token = request.cookies.get(auth.COOKIE)
+    user = auth.user_for(db, token)
+    if not user:
+        raise HTTPException(401, "Please log in")
+    if not auth.verify_password(body.current_password, user.password_hash):
+        raise HTTPException(403, "Your current password is wrong")
+    problem = auth.check_password_rules(body.new_password)
+    if problem:
+        raise HTTPException(422, problem)
+    user.password_hash = auth.hash_password(body.new_password)
+    db.commit()
+    auth.end_other_sessions(db, user, token)  # other devices must log in again
+    return {"changed": True}

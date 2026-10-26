@@ -83,3 +83,5 @@ export interface DataFile {
 }
 export interface DataCatalog { samples: DataFile[]; uploads: DataFile[] }
 export interface DataPreview { name: string; readable: boolean; columns: string[]; rows: string[][] }
+
+export interface AuthStatus { auth_enabled: boolean; needs_setup: boolean; user: { username: string } | null }

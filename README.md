@@ -19,11 +19,12 @@ A business workflow automation platform. You build workflows from simple steps, 
 - **Assistant (rules-based).** Describe a workflow in plain English and get a proposed workflow built only from the engine's own step types, with the reason for each step and warnings about anything it cannot do. It can also explain an existing workflow in plain words with improvement ideas, and summarize why runs failed with advice. It is **not an AI language model**: it follows keyword rules, is free, and works offline. Nothing is saved until you click save.
 - **Schedules.** Run a workflow every few minutes (5 or more), every day, or every week at a time on your computer's clock. A small background thread inside the backend checks every 20 seconds. Runs are recorded as "schedule" runs. A page shows the next and last run, and says honestly whether the scheduler is running. Schedules only run while the backend is running, and a run missed while it was off is done once on start-up, not repeated.
 - **Data Sources.** One page lists the CSV files workflows can read: the fictional sample files and your uploads. For each file it shows rows, columns, size and which workflows use it. You can preview the first rows and delete your own uploads. Uploads keep their original name for display but are stored under random names. Sample files cannot be deleted.
-- **Tests.** 80 backend tests (pytest) and 44 frontend tests (Vitest).
+- **Login.** The whole API is locked until you log in. The first time the app opens, you create one owner account (username, and a password of 10+ characters with a capital letter and a number). Passwords are hashed with scrypt, sessions are random tokens whose hash is stored, the cookie is HttpOnly, five wrong passwords lock that name for 10 minutes, changing the password logs out other devices, and changes sent from an unknown website are refused. It is built for one owner on a trusted computer: there are no roles, no password reset by email, and you should still serve it over HTTPS (and set AUTH_COOKIE_SECURE=true) before putting it on the internet. Set AUTH_ENABLED=false to turn login off.
+- **Tests.** 91 backend tests (pytest) and 52 frontend tests (Vitest).
 
 ## Not built yet
 
-A language-model assistant (the current assistant is rule-based), user accounts. Notification steps only write to the log. Nothing is emailed.
+A language-model assistant (the current assistant is rule-based), multiple users and roles. Notification steps only write to the log. Nothing is emailed.
 
 ## Technology (all free)
 
@@ -64,11 +65,12 @@ backend/app/
   assistant.py    rules-based assistant: propose, explain, failure insights
   schedules.py    schedules and the background scheduler thread
   datasources.py  lists, previews and deletes CSV files safely
+  auth.py         password hashing, sessions, login limits
   models.py       Workflow, Execution, ExecutionStep tables
   seed.py         fictional sample data (safe to run many times)
   templates.py    ready-made workflow templates
 frontend/src/
-  pages/          Dashboard, Workflows, Builder, Editor, Templates, Executions, Analytics, Upload, Assistant, Schedules, Data Sources
+  pages/          Dashboard, Workflows, Builder, Editor, Templates, Executions, Analytics, Upload, Assistant, Schedules, Data Sources, Account
   flow.ts         layout and checks for the flow diagrams and the builder
   components/     shared UI and the flow diagram
 ```
@@ -83,7 +85,7 @@ frontend/src/
 ## Known limitations
 
 - Runs happen inside the web request, which is fine for small files. A background queue is the next step for long jobs.
-- No login yet, so do not put this on the internet.
+- Login is for one owner only. Do not put this on the internet without HTTPS.
 - The database has no migration tool yet. Add one (Alembic) before changing tables on real data.
 
 ## Screenshots

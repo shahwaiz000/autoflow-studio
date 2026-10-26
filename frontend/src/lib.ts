@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 
+/** Sent when the server says the login has ended, so the app can show the login page. */
+export const AUTH_LOST = "autoflow-auth-lost";
+
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
@@ -8,6 +11,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error("Cannot reach the backend. Check that it is running on port 8000.");
   }
   const body = await res.json().catch(() => null);
+  if (res.status === 401 && !path.startsWith("/auth/")) window.dispatchEvent(new Event(AUTH_LOST));
   if (!res.ok) throw new Error(body?.error?.message ?? `Request failed (${res.status})`);
   return body as T;
 }
@@ -84,6 +88,7 @@ export async function uploadCsv<T>(form: FormData): Promise<T> {
     throw new Error("Cannot reach the backend. Check that it is running on port 8000.");
   }
   const body = await res.json().catch(() => null);
+  if (res.status === 401) window.dispatchEvent(new Event(AUTH_LOST));
   if (!res.ok) throw new Error(body?.error?.message ?? `Upload failed (${res.status})`);
   return body as T;
 }

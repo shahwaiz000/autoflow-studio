@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
+import { useAuth } from "../auth";
 import { useApi } from "../lib";
 import { Icon, type IconName } from "./icons";
 
@@ -19,11 +20,13 @@ const SOON: { label: string; icon: IconName }[] = [];
 
 function pageTitle(path: string): string {
   if (path === "/") return "Dashboard";
+  if (path.startsWith("/account")) return "Account";
   const hit = LIVE.filter((l) => l.to !== "/" && path.startsWith(l.to)).sort((a, b) => b.to.length - a.to.length)[0];
   return hit ? hit.label : "AutoFlow Studio";
 }
 
 function Sidebar({ version }: { version?: string }) {
+  const { username, loginEnabled, logout } = useAuth();
   return (
     <div className="flex h-full flex-col">
       <Link to="/" className="flex items-center gap-3 px-5 py-6">
@@ -57,6 +60,12 @@ function Sidebar({ version }: { version?: string }) {
           </span>
         ))}
       </nav>
+      {loginEnabled && username && (
+        <div className="mx-3 mb-2 flex items-center justify-between rounded-lg bg-white/5 px-3 py-2 text-sm">
+          <Link to="/account" className="truncate font-medium text-slate-200 hover:text-white" title="Account settings">{username}</Link>
+          <button onClick={logout} className="ml-2 shrink-0 text-xs text-slate-400 hover:text-white">Log out</button>
+        </div>
+      )}
       <p className="px-5 py-4 text-xs text-slate-500">{version ? `Version ${version}` : "Local workspace"}</p>
     </div>
   );

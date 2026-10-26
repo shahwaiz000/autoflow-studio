@@ -9,6 +9,9 @@ class Settings(BaseSettings):
     data_dir: Path = Path("./data")
     cors_origins: str = "http://localhost:5173"
     scheduler_enabled: bool = True
+    auth_enabled: bool = True
+    auth_cookie_secure: bool = False  # set true when served over https
+    session_days: int = 7
     scheduler_tick_seconds: int = 20
 
     @property

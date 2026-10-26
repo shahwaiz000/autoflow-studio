@@ -4,6 +4,7 @@ import tempfile
 _tmp = tempfile.mkdtemp()
 os.environ["DATABASE_URL"] = f"sqlite:///{_tmp}/test.db"
 os.environ["DATA_DIR"] = _tmp
+os.environ["AUTH_ENABLED"] = "false"  # test_auth.py switches it on for its own tests
 os.environ["SCHEDULER_ENABLED"] = "false"  # tests call run_due() themselves
 
 import pytest  # noqa: E402
