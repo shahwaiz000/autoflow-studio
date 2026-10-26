@@ -47,3 +47,23 @@ export interface Template {
   key: string; name: string; description: string; category: string; tags: string[]; note: string; step_count: number;
   steps: { id: string; type: string; name: string; next?: string; config?: Record<string, unknown> }[];
 }
+
+export interface AssistantInfo {
+  provider: string; uses_ai_model: boolean; limits: string[];
+  datasets: { label: string; file: string; columns: string[] }[];
+}
+export interface Proposal {
+  status: "ok" | "needs_detail"; request: string; message?: string;
+  name?: string; description?: string; category?: string; warnings: string[];
+  steps: { id: string; type: string; name: string; next?: string; retries?: number; config?: Record<string, unknown> }[];
+  reasons: { step: string; why: string }[];
+}
+export interface Explanation {
+  workflow_id: number; name: string; summary: string; suggestions: string[];
+  steps: { id: string; name: string; type: string; text: string }[];
+  history: { runs: number; failed: number; success_rate: number | null; last_error: string | null };
+}
+export interface FailureInsights {
+  days: number; total_runs: number; total_failed: number; headline: string;
+  items: { reason: string; count: number; workflows: string[]; example_execution_id: number | null; advice: string }[];
+}

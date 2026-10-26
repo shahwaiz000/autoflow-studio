@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from . import analytics
+from . import analytics, assistant
 from .config import settings
 from .database import Base, SessionLocal, engine, get_db
 from .engine import run_workflow
@@ -295,3 +295,28 @@ def use_template(key: str, db: Session = Depends(get_db)):
     db.add(wf)
     db.commit()
     return _wf_dict(wf, True)
+
+
+class AssistantIn(BaseModel):
+    request: str = Field(min_length=3, max_length=500)
+
+
+@app.get("/api/assistant/info")
+def assistant_info():
+    return assistant.info()
+
+
+@app.post("/api/assistant/propose")
+def assistant_propose(body: AssistantIn, db: Session = Depends(get_db)):
+    return assistant.propose(db, body.request.strip())
+
+
+@app.get("/api/assistant/explain/{wid}")
+def assistant_explain(wid: int, db: Session = Depends(get_db)):
+    return assistant.explain(db, _get_workflow(db, wid))
+
+
+@app.get("/api/assistant/failures")
+def assistant_failures(days: int = Query(14, ge=1, le=365), source: str = Query("all", pattern=SOURCE),
+                       db: Session = Depends(get_db)):
+    return assistant.failures(db, days, source)

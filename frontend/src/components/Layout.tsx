@@ -11,10 +11,10 @@ const LIVE: { to: string; label: string; icon: IconName; end?: boolean }[] = [
   { to: "/executions", label: "Executions", icon: "executions" },
   { to: "/analytics", label: "Analytics", icon: "analytics" },
   { to: "/upload", label: "Upload CSV", icon: "upload" },
+  { to: "/assistant", label: "Assistant", icon: "sparkles" },
 ];
 const SOON: { label: string; icon: IconName }[] = [
   { label: "Data Sources", icon: "database" },
-  { label: "AI Assistant", icon: "sparkles" },
 ];
 
 function pageTitle(path: string): string {
