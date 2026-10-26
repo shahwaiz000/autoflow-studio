@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, event, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
@@ -206,3 +206,30 @@ class ExecutionException(Base):
                 "left_amount": self.left_amount, "right_amount": self.right_amount, "difference": self.difference,
                 "reason": self.reason, "decision": self.decision, "decided_by": self.decided_by,
                 "decided_at": iso(self.decided_at), "note": self.note}
+
+
+class AuditEvent(Base):
+    """One thing a person did, recorded when it happened. The app can add rows but never change or delete them."""
+    __tablename__ = "audit_events"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    actor: Mapped[str] = mapped_column(String(40))
+    action: Mapped[str] = mapped_column(String(30))  # approved | rejected | reopened
+    execution_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    exception_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    key: Mapped[str] = mapped_column(String(120), default="")
+    detail: Mapped[str] = mapped_column(String(400), default="")
+
+    def to_dict(self) -> dict:
+        return {"id": self.id, "at": iso(self.at), "actor": self.actor, "action": self.action, "execution_id": self.execution_id,
+                "exception_id": self.exception_id, "key": self.key, "detail": self.detail}
+
+
+@event.listens_for(AuditEvent, "before_update")
+def _no_edits(*_):
+    raise ValueError("The audit trail cannot be changed")
+
+
+@event.listens_for(AuditEvent, "before_delete")
+def _no_deletes(*_):
+    raise ValueError("The audit trail cannot be changed")

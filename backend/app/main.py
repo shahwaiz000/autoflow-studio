@@ -11,11 +11,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from . import analytics, assistant, auth, datasources, reconcile, runqueue, schedules, tables
+from . import analytics, assistant, auth, datasources, reconcile, review, runqueue, schedules, tables
 from .config import settings
 from .database import Base, SessionLocal, engine, get_db
 from .engine import required_inputs, run_workflow
-from .models import Execution, ExecutionException, Schedule, User, Workflow, iso, utcnow
+from .models import AuditEvent, Execution, ExecutionException, Schedule, User, Workflow, iso, utcnow
 from .definitions import clean_definition
 from .seed import seed
 from .templates import TEMPLATES
@@ -255,8 +255,8 @@ EXCEPTION_KINDS = "^(" + "|".join(reconcile.KINDS) + ")$"
 
 
 @app.get("/api/executions/{eid}/exceptions")
-def list_exceptions(eid: int, kind: str | None = Query(None, pattern=EXCEPTION_KINDS), limit: int = Query(100, ge=1, le=500),
-                    offset: int = Query(0, ge=0), db: Session = Depends(get_db)):
+def list_exceptions(eid: int, kind: str | None = Query(None, pattern=EXCEPTION_KINDS), decision: str | None = Query(None, pattern="^(pending|approved|rejected)$"),
+                    limit: int = Query(100, ge=1, le=500), offset: int = Query(0, ge=0), db: Session = Depends(get_db)):
     """Everything a reconciliation run found that does not agree, worst problems first."""
     if not db.get(Execution, eid):
         raise HTTPException(404, f"Execution {eid} not found")
@@ -264,9 +264,49 @@ def list_exceptions(eid: int, kind: str | None = Query(None, pattern=EXCEPTION_K
     by_kind = {k: n for k, n in db.query(ExecutionException.kind, func.count()).filter_by(execution_id=eid).group_by(ExecutionException.kind)}
     if kind:
         q = q.filter_by(kind=kind)
+    if decision == "pending":
+        q = q.filter(ExecutionException.decision.is_(None))
+    elif decision:
+        q = q.filter_by(decision=decision)
     total = q.count()
     items = q.order_by(ExecutionException.id).offset(offset).limit(limit).all()
-    return {"total": total, "by_kind": by_kind, "labels": reconcile.KINDS, "items": [i.to_dict() for i in items]}
+    return {"total": total, "by_kind": by_kind, "by_decision": review.counts(db, eid), "labels": reconcile.KINDS, "items": [i.to_dict() for i in items]}
+
+
+class DecideIn(BaseModel):
+    ids: list[int] = Field(min_length=1, max_length=500)
+    decision: str = Field(pattern="^(approved|rejected|pending)$")
+    note: str = Field("", max_length=300)
+
+
+def _actor(request: Request, db: Session) -> str:
+    user = auth.user_for(db, request.cookies.get(auth.COOKIE)) if settings.auth_enabled else None
+    return user.username if user else "local user"
+
+
+@app.post("/api/executions/{eid}/exceptions/decide")
+def decide_exceptions(eid: int, body: DecideIn, request: Request, db: Session = Depends(get_db)):
+    """Approve, reject or re-open exceptions. Every change is added to the audit trail."""
+    if not db.get(Execution, eid):
+        raise HTTPException(404, f"Execution {eid} not found")
+    try:
+        changed = review.decide(db, eid, body.ids, body.decision, body.note, _actor(request, db))
+    except LookupError as e:
+        raise HTTPException(404, str(e))
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    return {"changed": changed, "by_decision": review.counts(db, eid)}
+
+
+@app.get("/api/audit")
+def audit_trail(execution_id: int | None = None, limit: int = Query(100, ge=1, le=500), offset: int = Query(0, ge=0), db: Session = Depends(get_db)):
+    """Who decided what and when, newest first. Read only: there is no way to edit or delete an entry."""
+    q = db.query(AuditEvent)
+    if execution_id is not None:
+        q = q.filter_by(execution_id=execution_id)
+    total = q.count()
+    items = q.order_by(AuditEvent.id.desc()).offset(offset).limit(limit).all()
+    return {"total": total, "items": [i.to_dict() for i in items]}
 
 
 @app.get("/api/executions/{eid}/download/{kind}")

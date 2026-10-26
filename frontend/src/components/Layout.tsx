@@ -8,6 +8,7 @@ const LIVE: { to: string; label: string; icon: IconName; end?: boolean }[] = [
   { to: "/", label: "Overview", icon: "dashboard", end: true },
   { to: "/workflows", label: "Reconciliations", icon: "workflow" },
   { to: "/executions", label: "Run history", icon: "executions" },
+  { to: "/audit", label: "Audit trail", icon: "check" },
   { to: "/data-sources", label: "Data files", icon: "database" },
   { to: "/schedules", label: "Schedules", icon: "clock" },
   { to: "/assistant", label: "Assistant", icon: "sparkles" },

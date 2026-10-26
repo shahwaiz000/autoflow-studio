@@ -126,3 +126,17 @@ def test_login_can_be_turned_off(client):
     s = client.get("/api/auth/status").json()
     assert s["auth_enabled"] is False and s["needs_setup"] is False
     assert client.get("/api/workflows").status_code == 200
+
+
+def test_a_decision_is_recorded_under_the_logged_in_name(locked_client):
+    from app.models import Execution, ExecutionException, Workflow, utcnow
+    setup(locked_client, "shahwaiz")
+    with SessionLocal() as db:
+        ex = Execution(workflow_id=db.query(Workflow).first().id, trigger_type="manual", status="success", started_at=utcnow())
+        ex.exceptions.append(ExecutionException(kind="duplicate", key="WB-1", reason="test"))
+        db.add(ex)
+        db.commit()
+        eid, xid = ex.id, ex.exceptions[0].id
+    r = locked_client.post(f"/api/executions/{eid}/exceptions/decide", json={"ids": [xid], "decision": "approved", "note": "ok"})
+    assert r.status_code == 200, r.text
+    assert locked_client.get("/api/audit", params={"execution_id": eid}).json()["items"][0]["actor"] == "shahwaiz"

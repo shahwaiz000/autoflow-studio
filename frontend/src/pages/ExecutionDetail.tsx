@@ -1,9 +1,10 @@
 import { Link, useParams } from "react-router-dom";
 import { Card, ErrorBox, Loading, PageHeader, StatusBadge } from "../components/ui";
 import FlowDiagram from "../components/FlowDiagram";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { formatDate, formatDuration, inProgress, useApi } from "../lib";
-import type { Execution, ExceptionList, Workflow } from "../types";
+import ExceptionReview from "../components/ExceptionReview";
+import type { Execution, Workflow } from "../types";
 
 function RunDiagram({ ex }: { ex: Execution }) {
   const { data } = useApi<Workflow>(`/workflows/${ex.workflow_id}`);
@@ -23,8 +24,6 @@ function Reconciliation({ ex }: { ex: Execution }) {
   const m = ex.result?.metrics ?? {};
   const raw = ex.result?.details as { comparisons?: Record<string, unknown>[] } | undefined;
   const d = (raw?.comparisons?.[0] ?? {}) as { left?: string; right?: string; tolerance?: number | null };
-  const [kind, setKind] = useState("");
-  const { data, error, loading, reload } = useApi<ExceptionList>(`/executions/${ex.id}/exceptions${kind ? `?kind=${kind}` : ""}`);
   const tiles: [string, string | number][] = [
     ["Rows matched", m.matched_rows ?? 0], ["Exceptions", m.exceptions ?? 0], ["Amount differences", m.amount_mismatches ?? 0],
     ["Missing in " + (d.right ?? "second table"), m.missing_in_right ?? 0], ["Missing in " + (d.left ?? "first table"), m.missing_in_left ?? 0],
@@ -39,32 +38,7 @@ function Reconciliation({ ex }: { ex: Execution }) {
       </dl>
       {(m.unmatched_amount ?? 0) > 0 || (m.amount_difference ?? 0) > 0 ? (
         <p className="mb-3 text-sm text-slate-600">Total amount difference on mismatches: <b>{money(m.amount_difference)}</b>. Amount of unmatched rows: <b>{money(m.unmatched_amount)}</b>.</p>) : null}
-      {error ? <ErrorBox message={error} retry={reload} /> : loading && !data ? <Loading /> : data && (
-        data.total === 0 && !kind ? <p className="text-sm text-emerald-700">Everything matched. There are no exceptions.</p> : (
-          <>
-            <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
-              <label>Show <select aria-label="Filter by type" className="rounded-lg border border-slate-300 px-2 py-1" value={kind} onChange={(e) => setKind(e.target.value)}>
-                <option value="">All exceptions ({Object.values(data.by_kind).reduce((a, b) => a + b, 0)})</option>
-                {Object.entries(data.labels).filter(([k]) => data.by_kind[k]).map(([k, l]) => <option key={k} value={k}>{l} ({data.by_kind[k]})</option>)}
-              </select></label>
-              <a className="ml-auto rounded-lg border border-slate-300 px-3 py-1.5 hover:bg-slate-50" href={`/api/executions/${ex.id}/download/exceptions`}>Exceptions (CSV)</a>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="text-xs uppercase text-slate-500"><tr>
-                  <th className="py-2 pr-3">Type</th><th className="pr-3">Key</th><th className="pr-3">Rows</th>
-                  <th className="pr-3 text-right">First amount</th><th className="pr-3 text-right">Second amount</th><th className="pr-3 text-right">Difference</th><th>Reason</th></tr></thead>
-                <tbody>{data.items.map((r) => (
-                  <tr key={r.id} className="border-t border-slate-100 align-top">
-                    <td className="py-2 pr-3 whitespace-nowrap">{data.labels[r.kind] ?? r.kind}</td>
-                    <td className="pr-3 font-mono text-xs">{r.key || "-"}</td>
-                    <td className="pr-3 whitespace-nowrap text-slate-500">{[r.left_row && `1st: ${r.left_row}`, r.right_row && `2nd: ${r.right_row}`].filter(Boolean).join(", ") || "-"}</td>
-                    <td className="pr-3 text-right">{money(r.left_amount)}</td><td className="pr-3 text-right">{money(r.right_amount)}</td><td className="pr-3 text-right">{money(r.difference)}</td>
-                    <td className="text-slate-600">{r.reason}</td></tr>))}</tbody>
-              </table>
-            </div>
-            {data.total > data.items.length && <p className="mt-2 text-xs text-slate-500">Showing the first {data.items.length} of {data.total}. The CSV has all of them.</p>}
-          </>))}
+      <ExceptionReview executionId={ex.id} />
     </Card>
   );
 }

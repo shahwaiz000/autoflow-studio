@@ -10,7 +10,7 @@ beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn((url: string) => {
     let body: unknown = {};
     if (url === "/api/executions/4") body = { id: 4, workflow_id: 1, workflow_name: "Invoice Processing", status, trigger_type: "manual", started_at: "2026-10-26T10:00:00Z", finished_at: null, duration_seconds: null, error_message: null, is_demo: false, steps, inputs, result };
-    else if (url.startsWith("/api/executions/4/exceptions")) body = { total: 2, by_kind: { amount_mismatch: 1, missing_in_right: 1 }, labels: { amount_mismatch: "Amount differs", missing_in_right: "Missing in second file" },
+    else if (url.startsWith("/api/executions/4/exceptions")) body = { total: 2, by_kind: { amount_mismatch: 1, missing_in_right: 1 }, by_decision: { pending: 2, approved: 0, rejected: 0 }, labels: { amount_mismatch: "Amount differs", missing_in_right: "Missing in second file" },
       items: [{ id: 1, kind: "amount_mismatch", key: "W100", left_row: 3, right_row: 5, left_amount: 100, right_amount: 90, difference: -10, reason: "Amounts differ by 10.00", decision: null }, { id: 2, kind: "missing_in_right", key: "W101", left_row: 4, right_row: null, left_amount: 50, right_amount: null, difference: null, reason: "No bank deposit found", decision: null }] };
     else if (url === "/api/workflows/1") body = { id: 1, name: "x", definition: { steps: [] } };
     return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });

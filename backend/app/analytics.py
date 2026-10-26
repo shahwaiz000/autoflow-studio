@@ -5,6 +5,7 @@ from datetime import timedelta
 
 from sqlalchemy.orm import Session
 
+from . import review
 from .models import Execution, Workflow, utcnow
 
 
@@ -46,7 +47,8 @@ def dashboard(db: Session, days: int = 30) -> dict:
                   "left": c.get("left"), "right": c.get("right"), "rows": rows,
                   "matched_rows": int(m.get("matched_rows") or 0), "exceptions": int(m.get("exceptions") or 0),
                   "match_rate": round(100 * int(m.get("matched_rows") or 0) / rows, 1) if rows else None,
-                  "amount_at_risk": _at_risk(m), "by_kind": c.get("counts", {})}
+                  "amount_at_risk": _at_risk(m), "by_kind": c.get("counts", {}),
+                  "review": review.counts(db, e.id)}
     since = utcnow() - timedelta(days=days)
     kinds = Counter()
     for e in recon:

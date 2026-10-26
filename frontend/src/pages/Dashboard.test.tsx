@@ -11,7 +11,8 @@ const base = {
   last_failure: { execution_id: 8, workflow: "COD Reconciliation", reason: "Step 'Bank deposits' failed: File not found" },
 };
 const latest = { execution_id: 9, workflow: "COD Reconciliation", started_at: "2026-10-26T10:00:00Z", left: "courier", right: "bank", rows: 62,
-  matched_rows: 55, exceptions: 7, match_rate: 88.7, amount_at_risk: 2103.41, by_kind: { missing_in_right: 3, amount_mismatch: 2, duplicate: 1, missing_in_left: 1 } };
+  matched_rows: 55, exceptions: 7, match_rate: 88.7, amount_at_risk: 2103.41, by_kind: { missing_in_right: 3, amount_mismatch: 2, duplicate: 1, missing_in_left: 1 },
+  review: { pending: 4, approved: 2, rejected: 1 } };
 
 function show(body: unknown) {
   vi.stubGlobal("fetch", vi.fn(() => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) })));
@@ -24,6 +25,7 @@ it("shows the latest reconciliation: match rate, exceptions, amount at risk and 
   expect(screen.getByText("88.7%")).toBeInTheDocument();
   expect(screen.getByText("55 of 62 rows matched")).toBeInTheDocument();
   expect(screen.getByText("2,103.41")).toBeInTheDocument();
+  expect(screen.getByText("7 found, 2 approved, 1 rejected")).toBeInTheDocument();  // the big number is what is still to review
   expect(screen.getByText("Missing in the second file")).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Open run #9" })).toHaveAttribute("href", "/executions/9");
 });

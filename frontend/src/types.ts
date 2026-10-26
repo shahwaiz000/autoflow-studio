@@ -23,6 +23,7 @@ export interface Dashboard {
   latest: {
     execution_id: number; workflow: string; started_at: string; left: string | null; right: string | null; rows: number;
     matched_rows: number; exceptions: number; match_rate: number | null; amount_at_risk: number; by_kind: Record<string, number>;
+    review: { pending: number; approved: number; rejected: number };
   } | null;
   trend: { date: string; runs: number; matched: number; exceptions: number }[];
   exceptions_by_kind: Record<string, number>;
@@ -78,5 +79,7 @@ export interface ExceptionRow {
   left_amount: number | null; right_amount: number | null; difference: number | null; reason: string;
   decision: string | null; decided_by: string | null; decided_at: string | null; note: string | null;
 }
-export interface ExceptionList { total: number; by_kind: Record<string, number>; labels: Record<string, string>; items: ExceptionRow[] }
+export interface ExceptionList { total: number; by_kind: Record<string, number>; by_decision: { pending: number; approved: number; rejected: number }; labels: Record<string, string>; items: ExceptionRow[] }
 export interface RunResult { metrics: Record<string, number>; details: Record<string, unknown> }
+export interface AuditEvent { id: number; at: string; actor: string; action: string; execution_id: number | null; exception_id: number | null; key: string; detail: string }
+export interface AuditList { total: number; items: AuditEvent[] }

@@ -71,7 +71,8 @@ export default function Dashboard() {
             <p className="mb-4 text-sm text-slate-500">{latest.workflow}, {timeAgo(latest.started_at)}</p>
             <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <Tile label="Match rate" value={latest.match_rate == null ? "-" : `${latest.match_rate}%`} hint={`${latest.matched_rows} of ${latest.rows} rows matched`} />
-              <Tile label="Exceptions to review" value={latest.exceptions} tone={latest.exceptions ? "text-amber-600" : "text-emerald-600"} />
+              <Tile label="Exceptions to review" value={latest.review.pending} tone={latest.review.pending ? "text-amber-600" : "text-emerald-600"}
+                hint={`${latest.exceptions} found, ${latest.review.approved} approved, ${latest.review.rejected} rejected`} />
               <Tile label="Amount at risk" value={money(latest.amount_at_risk)} hint="Differences plus amounts with no partner" />
               <Tile label="Rows compared" value={latest.rows} />
             </dl>

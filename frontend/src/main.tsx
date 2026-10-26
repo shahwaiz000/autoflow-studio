@@ -10,6 +10,7 @@ import Templates from "./pages/Templates";
 import WorkflowBuilder from "./pages/WorkflowBuilder";
 import ExecutionDetail from "./pages/ExecutionDetail";
 import Assistant from "./pages/Assistant";
+import AuditTrail from "./pages/AuditTrail";
 import Schedules from "./pages/Schedules";
 import DataSources from "./pages/DataSources";
 import Account from "./pages/Account";
@@ -28,6 +29,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <Route path="builder/:id" element={<WorkflowBuilder />} />
           <Route path="templates" element={<Templates />} />
           <Route path="assistant" element={<Assistant />} />
+          <Route path="audit" element={<AuditTrail />} />
           <Route path="schedules" element={<Schedules />} />
           <Route path="data-sources" element={<DataSources />} />
           <Route path="account" element={<Account />} />
