@@ -200,3 +200,15 @@ def test_the_editor_rejects_a_badly_set_up_compare_step(client):
     assert post(tolerance=True).status_code == 422
     assert post(tolerance="a lot").status_code == 422
     assert post(tolerance=0).status_code == 201
+
+
+def test_the_summary_sheet_of_a_reconciliation_is_in_plain_words(client, run_ctx):
+    import io
+    import openpyxl
+    r = client.get(f"/api/executions/{run_ctx['id']}/download/report")
+    wb = openpyxl.load_workbook(io.BytesIO(r.content))
+    assert wb.sheetnames[:2] == ["Summary", "Exceptions"]  # the exceptions come right after the summary
+    facts = dict(wb["Summary"].iter_rows(min_row=2, values_only=True))
+    assert facts["Rows matched"] > 0 and facts["Exceptions to review"] == run_ctx["result"]["metrics"]["exceptions"]
+    assert any(k.startswith("  Only in ") for k in facts) and "Missing in right" not in facts
+    assert facts["Run number"] == run_ctx["id"]

@@ -233,6 +233,26 @@ def profile(df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def _reconciliation_facts(ctx, c: dict) -> list:
+    """The Summary sheet of a reconciliation: plain words, the two files named, and the money at stake."""
+    m, left, right = ctx.metrics, c["left"], c["right"]
+    counts = c.get("counts", {})
+    diff, gone = float(m.get("amount_difference") or 0), float(m.get("unmatched_amount") or 0)
+    rows = [("Run number", ctx.execution_id), ("First file (table)", left), ("Second file (table)", right),
+            (f"Rows in {left}", c["left_rows"]), (f"Rows in {right}", c["right_rows"]),
+            ("Rows matched", m.get("matched_rows", 0)), ("Exceptions to review", m.get("exceptions", 0)),
+            ("  Amount differs", counts.get("amount_mismatch", 0)),
+            (f"  Only in {left}, not in {right}", counts.get("missing_in_right", 0)),
+            (f"  Only in {right}, not in {left}", counts.get("missing_in_left", 0)),
+            ("  Duplicate key", counts.get("duplicate", 0)),
+            ("  Amount missing or unreadable", counts.get("unreadable_amount", 0)),
+            ("  No key", counts.get("missing_key", 0))]
+    if c.get("amounts_compared"):
+        rows += [("Allowed difference", c.get("tolerance")), ("Total of the amount differences", diff),
+                 ("Amount of rows with no partner", gone), ("Amount at risk (both added)", round(diff + gone, 2))]
+    return rows
+
+
 def h_report(cfg, ctx):
     """Write the cleaned data, a column-by-column summary, and one Excel workbook with both plus the run facts."""
     from .analytics import safe_cell
@@ -242,15 +262,15 @@ def h_report(cfg, ctx):
     prof = profile(df)
     prof.to_csv(f"{base}_summary.csv", index=False)
     df.to_csv(f"{base}_processed.csv", index=False)
-    facts = [("Rows in the report", len(df)), ("Columns", len(df.columns)),
-             *[(k.replace("_", " ").capitalize(), v) for k, v in ctx.metrics.items() if isinstance(v, (int, float))]]
+    comps = ctx.details.get("comparisons") or []
+    facts = _reconciliation_facts(ctx, comps[0]) if comps else [
+        ("Rows in the report", len(df)), ("Columns", len(df.columns)),
+        *[(k.replace("_", " ").capitalize(), v) for k, v in ctx.metrics.items() if isinstance(v, (int, float))]]
     safe = df.head(MAX_ROWS).copy()
     for c in safe.select_dtypes(include=["object", "string"]).columns:
         safe[c] = safe[c].map(lambda v: safe_cell(v) if isinstance(v, str) else v)  # text must never become an Excel formula
     with pd.ExcelWriter(f"{base}_report.xlsx", engine="openpyxl") as xw:
         pd.DataFrame(facts, columns=["What", "Value"]).to_excel(xw, sheet_name="Summary", index=False)
-        prof.to_excel(xw, sheet_name="Columns", index=False)
-        safe.to_excel(xw, sheet_name="Data", index=False)
         if ctx.exceptions is not None and len(ctx.exceptions):
             ex_out = ctx.exceptions.head(reconcile.MAX_EXCEPTIONS).copy()
             ex_out["kind"] = ex_out["kind"].map(reconcile.KINDS)
@@ -258,6 +278,8 @@ def h_report(cfg, ctx):
                 ex_out[c] = ex_out[c].map(lambda v: safe_cell(v) if isinstance(v, str) else v)
             ex_out.columns = ["Type", "Key", "Row in first table", "Row in second table", "First amount", "Second amount", "Difference", "Reason"]
             ex_out.to_excel(xw, sheet_name="Exceptions", index=False)
+        prof.to_excel(xw, sheet_name="Columns", index=False)
+        safe.to_excel(xw, sheet_name="Data", index=False)
         for ws in xw.book.worksheets:
             ws.freeze_panes = "A2"
             for col in ws.columns:
