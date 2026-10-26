@@ -9,7 +9,7 @@ export default function Executions() {
   const { data, error, loading, reload } = useApi<Execution[]>(`/executions?limit=100${status ? `&status=${status}` : ""}`);
   return (
     <>
-      <PageHeader title="Executions" subtitle="Every workflow run, newest first.">
+      <PageHeader title="Run history" subtitle="Every run, newest first. Open one to see its exceptions, files and step log.">
         <select aria-label="Filter by status" value={status} onChange={(e) => setStatus(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
           <option value="">All statuses</option><option value="success">Successful</option><option value="failed">Failed</option><option value="running">Running</option>
         </select>
