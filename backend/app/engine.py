@@ -176,9 +176,22 @@ def validate_definition(defn: dict) -> list[str]:
     return errors
 
 
-def run_workflow(db: Session, workflow: Workflow, trigger_type: str = "manual", definition: dict | None = None) -> Execution:
-    ex = Execution(workflow=workflow, trigger_type=trigger_type, status="running", started_at=utcnow())
+def create_execution(db: Session, workflow: Workflow, trigger_type: str = "manual", status: str = "running") -> Execution:
+    ex = Execution(workflow=workflow, trigger_type=trigger_type, status=status, started_at=utcnow())
     db.add(ex)
+    db.commit()
+    return ex
+
+
+def run_workflow(db: Session, workflow: Workflow, trigger_type: str = "manual", definition: dict | None = None) -> Execution:
+    """Run now, inside the caller's thread."""
+    return execute(db, create_execution(db, workflow, trigger_type), definition)
+
+
+def execute(db: Session, ex: Execution, definition: dict | None = None) -> Execution:
+    """Run the steps of an execution that already exists (used directly by the background queue)."""
+    workflow = ex.workflow
+    ex.status, ex.started_at = "running", utcnow()
     db.commit()
     defn = definition or workflow.definition
     ctx = Context()

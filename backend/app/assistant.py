@@ -270,7 +270,7 @@ def explain(db: Session, wf: Workflow) -> dict:
     if not wf.enabled:
         ideas.append("This workflow is disabled. Enable it on the Workflows page before you run it.")
 
-    done = db.query(Execution).filter(Execution.workflow_id == wf.id, Execution.status != "running").order_by(Execution.started_at.desc()).all()
+    done = db.query(Execution).filter(Execution.workflow_id == wf.id, Execution.status.notin_(("running", "queued"))).order_by(Execution.started_at.desc()).all()
     failed = [e for e in done if e.status == "failed"]
     history = {"runs": len(done), "failed": len(failed),
                "success_rate": round(100 * (len(done) - len(failed)) / len(done), 1) if done else None,

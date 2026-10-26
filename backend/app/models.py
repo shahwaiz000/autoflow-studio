@@ -40,7 +40,7 @@ class Execution(Base):
     __tablename__ = "executions"
     id: Mapped[int] = mapped_column(primary_key=True)
     workflow_id: Mapped[int] = mapped_column(ForeignKey("workflows.id"))
-    status: Mapped[str] = mapped_column(String(20), default="running")  # running|success|failed
+    status: Mapped[str] = mapped_column(String(20), default="running")  # queued|running|success|failed
     trigger_type: Mapped[str] = mapped_column(String(20), default="manual")
     started_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

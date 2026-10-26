@@ -3,9 +3,9 @@ import type { Status } from "../types";
 
 const STYLE: Record<string, string> = {
   success: "bg-mint-soft text-mint-dark", failed: "bg-coral-soft text-coral-dark",
-  running: "bg-sun-soft text-sun-dark",
+  running: "bg-sun-soft text-sun-dark", queued: "bg-slate-100 text-slate-700",
 };
-const DOT: Record<string, string> = { success: "bg-mint", failed: "bg-coral", running: "bg-sun" };
+const DOT: Record<string, string> = { success: "bg-mint", failed: "bg-coral", running: "bg-sun", queued: "bg-slate-400" };
 
 export function StatusBadge({ status }: { status: Status | string }) {
   return (

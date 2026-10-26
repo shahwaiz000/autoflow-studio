@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import type { Execution } from "./types";
 
 /** Sent when the server says the login has ended, so the app can show the login page. */
 export const AUTH_LOST = "autoflow-auth-lost";
@@ -91,4 +92,17 @@ export async function uploadCsv<T>(form: FormData): Promise<T> {
   if (res.status === 401) window.dispatchEvent(new Event(AUTH_LOST));
   if (!res.ok) throw new Error(body?.error?.message ?? `Upload failed (${res.status})`);
   return body as T;
+}
+
+export const inProgress = (status: string) => status === "queued" || status === "running";
+
+/** Ask the backend about a run until it is no longer waiting or running (or the time is up). */
+export async function waitForRun(id: number, onUpdate?: (ex: Execution) => void, intervalMs = 600, maxMs = 120_000): Promise<Execution> {
+  const end = Date.now() + maxMs;
+  for (;;) {
+    const ex = await api<Execution>(`/executions/${id}`);
+    onUpdate?.(ex);
+    if (!inProgress(ex.status) || Date.now() >= end) return ex;
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
 }

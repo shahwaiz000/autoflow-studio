@@ -20,7 +20,8 @@ A business workflow automation platform. You build workflows from simple steps, 
 - **Schedules.** Run a workflow every few minutes (5 or more), every day, or every week at a time on your computer's clock. A small background thread inside the backend checks every 20 seconds. Runs are recorded as "schedule" runs. A page shows the next and last run, and says honestly whether the scheduler is running. Schedules only run while the backend is running, and a run missed while it was off is done once on start-up, not repeated.
 - **Data Sources.** One page lists the CSV files workflows can read: the fictional sample files and your uploads. For each file it shows rows, columns, size and which workflows use it. You can preview the first rows and delete your own uploads. Uploads keep their original name for display but are stored under random names. Sample files cannot be deleted.
 - **Login.** The whole API is locked until you log in. The first time the app opens, you create one owner account (username, and a password of 10+ characters with a capital letter and a number). Passwords are hashed with scrypt, sessions are random tokens whose hash is stored, the cookie is HttpOnly, five wrong passwords lock that name for 10 minutes, changing the password logs out other devices, and changes sent from an unknown website are refused. It is built for one owner on a trusted computer: there are no roles, no password reset by email, and you should still serve it over HTTPS (and set AUTH_COOKIE_SECURE=true) before putting it on the internet. Set AUTH_ENABLED=false to turn login off.
-- **Tests.** 91 backend tests (pytest) and 52 frontend tests (Vitest).
+- **Background runs.** Clicking Run on the Workflows page puts the run in a queue and returns at once, so the page never freezes. One worker runs the waiting workflows one after another. The run shows as queued, then running, then success or failed, and the page updates itself. The queue is held in memory: if the backend restarts, runs that were waiting or running are marked failed with a clear message instead of staying busy forever. CSV uploads and the Assistant's "save and run" still run inside the request.
+- **Tests.** 100 backend tests (pytest) and 57 frontend tests (Vitest).
 
 ## Not built yet
 
@@ -64,6 +65,7 @@ backend/app/
   analytics.py    dashboard and analytics numbers, CSV export
   assistant.py    rules-based assistant: propose, explain, failure insights
   schedules.py    schedules and the background scheduler thread
+  runqueue.py     in-memory background run queue with one worker
   datasources.py  lists, previews and deletes CSV files safely
   auth.py         password hashing, sessions, login limits
   models.py       Workflow, Execution, ExecutionStep tables
@@ -84,7 +86,7 @@ frontend/src/
 
 ## Known limitations
 
-- Runs happen inside the web request, which is fine for small files. A background queue is the next step for long jobs.
+- The background queue lives in memory and has one worker. For many users or very long jobs, use a real job system (for example Celery or RQ with Redis).
 - Login is for one owner only. Do not put this on the internet without HTTPS.
 - The database has no migration tool yet. Add one (Alembic) before changing tables on real data.
 

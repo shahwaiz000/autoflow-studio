@@ -1,4 +1,4 @@
-export type Status = "success" | "failed" | "running";
+export type Status = "success" | "failed" | "running" | "queued";
 
 export interface Execution {
   id: number; workflow_id: number; workflow_name: string; status: Status;

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Card, Empty, ErrorBox, Loading, PageHeader, StatusBadge } from "../components/ui";
-import { api, useApi } from "../lib";
+import { api, useApi, waitForRun } from "../lib";
 import type { Execution, Workflow } from "../types";
 
 function Steps({ id }: { id: number }) {
@@ -30,7 +30,12 @@ export default function Workflows() {
   async function run(w: Workflow) {
     setBusy(w.id); setResult(null);
     try {
-      const ex = await api<Execution>(`/workflows/${w.id}/run`, { method: "POST" });
+      // The run goes to the background queue, so the page never freezes; we then watch it until it ends.
+      const queued = await api<Execution>(`/workflows/${w.id}/run?background=true`, { method: "POST" });
+      setResult({ ok: true, id: queued.id, text: `${w.name} is waiting in the queue` });
+      const ex = await waitForRun(queued.id, (e) => {
+        if (e.status === "running") setResult({ ok: true, id: e.id, text: `${w.name} is running` });
+      });
       setResult({ ok: ex.status === "success", id: ex.id, text: `${w.name} ${ex.status}${ex.error_message ? `: ${ex.error_message}` : ""}` });
       reload();
     } catch (e) { setResult({ ok: false, text: (e as Error).message }); }

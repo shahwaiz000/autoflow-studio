@@ -47,3 +47,20 @@ describe("timeAgo", () => {
     expect(timeAgo(null, now)).toBe("-");
   });
 });
+
+describe("waitForRun", () => {
+  test("keeps asking until the run is finished and reports each update", async () => {
+    const states = ["queued", "running", "failed"];
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ id: 5, status: states.shift() }) })));
+    const seen: string[] = [];
+    const { waitForRun } = await import("./lib");
+    const final = await waitForRun(5, (e) => seen.push(e.status), 1);
+    expect(seen).toEqual(["queued", "running", "failed"]);
+    expect(final.status).toBe("failed");
+  });
+  test("gives up after the time limit instead of waiting forever", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ id: 5, status: "running" }) })));
+    const { waitForRun } = await import("./lib");
+    expect((await waitForRun(5, undefined, 1, 20)).status).toBe("running");
+  });
+});

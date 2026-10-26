@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from . import analytics, assistant, auth, datasources, schedules
+from . import analytics, assistant, auth, datasources, runqueue, schedules
 from .config import settings
 from .database import Base, SessionLocal, engine, get_db
 from .engine import run_workflow
@@ -27,13 +27,27 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(engine)
     with SessionLocal() as db:
         seed(db)
-    if settings.scheduler_enabled:
-        schedules.scheduler = schedules.Scheduler(SessionLocal, settings.scheduler_tick_seconds)
-        schedules.scheduler.start()
+    with SessionLocal() as db:
+        left = runqueue.recover_interrupted(db)
+        if left:
+            logging.getLogger("autoflow").warning("Marked %s interrupted run(s) as failed", left)
+    # Whoever starts a background worker is the one who stops it (matters when the app is started twice, as in tests)
+    own_queue = own_scheduler = None
+    if not (runqueue.runner and runqueue.runner.running):
+        own_queue = runqueue.runner = runqueue.RunQueue(SessionLocal)
+        own_queue.start()
+    if settings.scheduler_enabled and not (schedules.scheduler and schedules.scheduler.running):
+        own_scheduler = schedules.scheduler = schedules.Scheduler(SessionLocal, settings.scheduler_tick_seconds)
+        own_scheduler.start()
     yield
-    if schedules.scheduler:
-        schedules.scheduler.stop()
-        schedules.scheduler = None
+    if own_scheduler:
+        own_scheduler.stop()
+        if schedules.scheduler is own_scheduler:
+            schedules.scheduler = None
+    if own_queue:
+        own_queue.stop()
+        if runqueue.runner is own_queue:
+            runqueue.runner = None
 
 
 app = FastAPI(title="AutoFlow Studio API", version="0.1.0", lifespan=lifespan)
@@ -124,7 +138,7 @@ def list_workflows(search: str = "", enabled: bool | None = None, db: Session = 
     out = []
     for w in q.order_by(Workflow.name).all():
         d = _wf_dict(w)
-        runs = [e for e in w.executions if e.status != "running"]
+        runs = [e for e in w.executions if e.status not in ("running", "queued")]
         d["run_count"] = len(runs)
         d["last_status"] = max(runs, key=lambda e: e.started_at).status if runs else None
         out.append(d)
@@ -145,11 +159,28 @@ def patch_workflow(wid: int, body: WorkflowPatch, db: Session = Depends(get_db))
 
 
 @app.post("/api/workflows/{wid}/run", status_code=201)
-def run(wid: int, db: Session = Depends(get_db)):
+def run(wid: int, response: Response, background: bool = Query(False), db: Session = Depends(get_db)):
+    """Run now and wait for the result, or (background=true) queue it and return straight away."""
     wf = _get_workflow(db, wid)
     if not wf.enabled:
         raise HTTPException(409, f"Workflow '{wf.name}' is disabled. Enable it before running")
+    if background:
+        if not runqueue.runner or not runqueue.runner.running:
+            raise HTTPException(503, "The background queue is not running. Restart the backend")
+        try:
+            ex = runqueue.runner.submit(db, wf, "manual")
+        except runqueue.QueueFull as e:
+            raise HTTPException(429, str(e))
+        response.status_code = 202
+        return ex.to_dict(with_steps=True)
     return run_workflow(db, wf, "manual").to_dict(with_steps=True)
+
+
+@app.get("/api/queue/status")
+def queue_status():
+    r = runqueue.runner
+    return r.status() if r else {"running": False, "waiting": 0, "current_execution_id": None,
+                                 "finished_since_start": 0, "max_waiting": runqueue.MAX_WAITING, "note": "The queue is not running."}
 
 
 @app.get("/api/executions")

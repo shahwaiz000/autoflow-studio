@@ -1,7 +1,8 @@
 import { Link, useParams } from "react-router-dom";
 import { Card, ErrorBox, Loading, PageHeader, StatusBadge } from "../components/ui";
 import FlowDiagram from "../components/FlowDiagram";
-import { formatDate, formatDuration, useApi } from "../lib";
+import { useEffect } from "react";
+import { formatDate, formatDuration, inProgress, useApi } from "../lib";
 import type { Execution, Workflow } from "../types";
 
 function RunDiagram({ ex }: { ex: Execution }) {
@@ -19,12 +20,19 @@ function RunDiagram({ ex }: { ex: Execution }) {
 export default function ExecutionDetail() {
   const { id } = useParams();
   const { data: ex, error, loading, reload } = useApi<Execution>(`/executions/${id}`);
-  if (loading) return <Loading />;
+  const waiting = !!ex && inProgress(ex.status);
+  useEffect(() => {  // a run that is still waiting or running refreshes itself
+    if (!waiting) return;
+    const t = window.setInterval(reload, 1000);
+    return () => window.clearInterval(t);
+  }, [waiting, reload]);
+  if (loading && !ex) return <Loading />;
   if (error || !ex) return <ErrorBox message={error ?? "Not found"} retry={reload} />;
   return (
     <>
       <Link to="/executions" className="mb-3 inline-block text-sm text-brand-dark hover:underline">Back to executions</Link>
       <PageHeader title={`Execution #${ex.id}`} subtitle={ex.workflow_name}><StatusBadge status={ex.status} /></PageHeader>
+      {waiting && <p role="status" className="mb-4 rounded-lg bg-sun-soft px-4 py-2 text-sm text-sun-dark">{ex.status === "queued" ? "This run is waiting in the queue." : "This run is in progress."} The page updates by itself.</p>}
       {ex.is_demo && <p className="mb-4 rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-600">This is a seeded demo execution (fictional). Its step log is illustrative.</p>}
       <Card className="mb-4">
         <dl className="grid gap-4 text-sm sm:grid-cols-4">

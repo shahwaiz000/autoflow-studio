@@ -39,7 +39,7 @@ def dashboard(db: Session, days: int = 14) -> dict:
             "enabled_workflows": db.query(Workflow).filter_by(enabled=True).count(),
             "executions": len(execs), "successful": len(ok),
             "failed": len(done) - len(ok),
-            "running": sum(e.status == "running" for e in execs),
+            "running": sum(e.status in ("running", "queued") for e in execs),
             "success_rate": round(100 * len(ok) / len(done), 1) if done else None,
             "avg_duration_seconds": round(sum(durations) / len(durations), 1) if durations else None,
         },
@@ -57,7 +57,7 @@ def dashboard(db: Session, days: int = 14) -> dict:
 
 def _finished(db: Session, days: int, source: str) -> list[Execution]:
     q = db.query(Execution).filter(Execution.started_at >= utcnow() - timedelta(days=days),
-                                   Execution.status != "running")
+                                   Execution.status.notin_(("running", "queued")))
     if source != "all":
         q = q.filter(Execution.is_demo.is_(source == "demo"))
     return q.order_by(Execution.started_at.desc()).all()
