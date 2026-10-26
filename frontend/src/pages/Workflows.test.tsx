@@ -67,3 +67,33 @@ describe("workflows that ask for files", () => {
     expect(screen.queryByRole("group", { name: "Choose files for this run" })).toBeNull();
   });
 });
+
+describe("deleting a workflow that has runs", () => {
+  const old = { ...wf, id: 5, name: "Old demo", built_in: false, run_count: 41 };
+  let deletes: string[] = [];
+  beforeEach(() => {
+    deletes = [];
+    vi.stubGlobal("fetch", vi.fn((url: string, init?: RequestInit) => {
+      if (init?.method === "DELETE") { deletes.push(url); return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ deleted: true, runs_deleted: 41 }) }); }
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([old]) });
+    }));
+  });
+
+  test("asks clearly first, says how many runs go, and only then erases them", async () => {
+    render(<MemoryRouter><Workflows /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
+    expect(deletes).toEqual([]);  // nothing is sent yet
+    expect(await screen.findByRole("alertdialog")).toHaveTextContent("all 41 runs");
+    fireEvent.click(screen.getByRole("button", { name: "Delete with its history" }));
+    await waitFor(() => expect(deletes).toEqual(["/api/workflows/5?with_history=true"]));
+    expect(await screen.findByText("Old demo was deleted with 41 runs")).toBeInTheDocument();
+  });
+
+  test("Keep it closes the box without deleting anything", async () => {
+    render(<MemoryRouter><Workflows /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Keep it" }));
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(deletes).toEqual([]);
+  });
+});

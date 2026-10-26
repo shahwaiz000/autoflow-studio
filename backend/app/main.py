@@ -368,16 +368,28 @@ def update_workflow(wid: int, body: WorkflowIn, db: Session = Depends(get_db)):
 
 
 @app.delete("/api/workflows/{wid}")
-def delete_workflow(wid: int, db: Session = Depends(get_db)):
+def delete_workflow(wid: int, with_history: bool = False, db: Session = Depends(get_db)):
+    """Delete your own workflow. If it has runs, they are only erased when with_history=true is asked for explicitly."""
     wf = _get_workflow(db, wid)
     if wf.name in BUILT_IN:
         raise HTTPException(409, "Built-in workflows cannot be deleted. You can disable them instead")
-    if db.query(Execution).filter_by(workflow_id=wid).count():
-        raise HTTPException(409, "This workflow has run history, so it cannot be deleted. Disable it instead")
+    runs = db.query(Execution).filter_by(workflow_id=wid).all()
+    if runs and not with_history:
+        raise HTTPException(409, f"This workflow has {len(runs)} runs in its history, so it cannot be deleted by itself. "
+                                 "Choose 'Delete with its history' to erase the runs as well, or disable it instead")
+    ids = [e.id for e in runs]
+    if ids and db.query(AuditEvent).filter(AuditEvent.execution_id.in_(ids)).count():
+        raise HTTPException(409, "Someone approved or rejected exceptions from its runs. Those decisions belong to the audit trail, "
+                                 "so the workflow and its runs are kept. Disable it instead")
+    for e in runs:
+        db.delete(e)  # steps, inputs, results and exceptions go with it
     db.query(Schedule).filter_by(workflow_id=wid).delete()
     db.delete(wf)
     db.commit()
-    return {"deleted": True}
+    for eid in ids:  # the report files of those runs
+        for f in settings.reports_dir.glob(f"execution_{eid}_*"):
+            f.unlink(missing_ok=True)
+    return {"deleted": True, "runs_deleted": len(ids)}
 
 
 @app.get("/api/templates")

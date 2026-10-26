@@ -23,6 +23,7 @@ export default function Workflows() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("");
   const [open, setOpen] = useState<number | null>(null);
+  const [erasing, setErasing] = useState<number | null>(null);
   const [busy, setBusy] = useState<number | null>(null);
   const [choosing, setChoosing] = useState<number | null>(null);
   const [result, setResult] = useState<{ ok: boolean; text: string; id?: number } | null>(null);
@@ -48,10 +49,14 @@ export default function Workflows() {
     catch (e) { setResult({ ok: false, text: (e as Error).message }); }
   }
 
-  async function remove(w: Workflow) {
-    if (!window.confirm(`Delete "${w.name}"? This cannot be undone.`)) return;
-    try { await api(`/workflows/${w.id}`, { method: "DELETE" }); setResult({ ok: true, text: `${w.name} was deleted` }); reload(); }
-    catch (e) { setResult({ ok: false, text: (e as Error).message }); }
+  async function remove(w: Workflow, withHistory = false) {
+    if (!withHistory && (w.run_count ?? 0) > 0) { setErasing(w.id); return; }  // runs would be erased too, so ask clearly first
+    if (!withHistory && !window.confirm(`Delete "${w.name}"? This cannot be undone.`)) return;
+    try {
+      const r = await api<{ runs_deleted?: number }>(`/workflows/${w.id}${withHistory ? "?with_history=true" : ""}`, { method: "DELETE" });
+      setResult({ ok: true, text: `${w.name} was deleted${r.runs_deleted ? ` with ${r.runs_deleted} runs` : ""}` });
+      setErasing(null); reload();
+    } catch (e) { setResult({ ok: false, text: (e as Error).message }); setErasing(null); }
   }
 
   return (
@@ -98,6 +103,15 @@ export default function Workflows() {
                   {open === w.id ? "Hide steps" : "View steps"}
                 </button>
               </div>
+              {erasing === w.id && (
+                <div role="alertdialog" aria-label={`Delete ${w.name} with its history`} className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+                  <p><b>{w.name}</b> has {w.run_count} runs. Deleting it erases the workflow, its schedules and all {w.run_count} runs with their reports. This cannot be undone.</p>
+                  <div className="mt-2 flex gap-2">
+                    <button onClick={() => remove(w, true)} className="rounded-lg bg-red-600 px-3 py-1.5 font-medium text-white hover:bg-red-700">Delete with its history</button>
+                    <button onClick={() => setErasing(null)} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 hover:bg-slate-50">Keep it</button>
+                  </div>
+                </div>
+              )}
               {choosing === w.id && w.inputs && <RunPanel inputs={w.inputs} onRun={(chosen) => run(w, chosen)} onCancel={() => setChoosing(null)} />}
               {open === w.id && <Steps id={w.id} />}
             </Card>

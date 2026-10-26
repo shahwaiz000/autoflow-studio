@@ -11,7 +11,7 @@ Written for Shahwaiz. Read it out loud a few times. Every claim below is true of
 1. **The problem.** Finance teams compare two lists by hand every day (what couriers collected against what reached the bank), and differences get missed. The tool finds every difference and explains it, so people only review what is wrong.
 2. **What it does.** A Compare step with exceptions and reasons, Excel and CSV reports, an overview of the latest reconciliation, run history with a flow diagram, schedules, files chosen at run time, a drag-and-drop builder for custom rules, login, a background queue, and a rules-based assistant that builds reconciliation workflows.
 3. **How it is built.** React + TypeScript on the front, FastAPI + SQLAlchemy + SQLite + Pandas on the back. Workflows are stored as JSON data, and the engine only runs a fixed list of step types.
-4. **How I checked it.** 161 backend tests and 74 frontend tests, plus I ran the real server and tried the features end to end.
+4. **How I checked it.** 164 backend tests and 76 frontend tests, plus I ran the real server and tried the features end to end.
 5. **What it is not.** A single-owner local tool. It is not ready for the internet or many users, and I know why (see "Limits").
 
 ## How a run works (draw this on a whiteboard)
