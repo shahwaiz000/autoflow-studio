@@ -52,10 +52,11 @@ def dashboard(db: Session, days: int = 30) -> dict:
     for e in recon:
         if e.started_at >= since:
             kinds.update({k: n for k, n in (_reconciliation(e).get("counts") or {}).items() if n})
-    failed = [e for e in done if e.status == "failed"]
+    # Only a failure that happened after the latest good reconciliation is still worth a warning.
+    failed = [e for e in done if e.status == "failed" and (not recon or e.started_at > recon[0].started_at)]
     return {
         "days": days,
-        "totals": {"reconciliations": len(recon), "runs": len(done), "failed": len(failed),
+        "totals": {"reconciliations": len(recon), "runs": len(done), "failed": sum(e.status == "failed" for e in done),
                    "running": sum(e.status in ("running", "queued") for e in execs),
                    "workflows": db.query(Workflow).count()},
         "latest": latest,

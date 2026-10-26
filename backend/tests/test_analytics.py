@@ -35,3 +35,15 @@ def test_no_made_up_history_ships_with_the_product(client):
 def test_csv_injection_is_neutralised():
     assert safe_cell("=1+1") == "'=1+1" and safe_cell("@SUM(A1)") == "'@SUM(A1)"
     assert safe_cell("Normal text") == "Normal text" and safe_cell(None) == ""
+
+
+def test_an_old_failure_does_not_nag_after_a_newer_good_reconciliation(client):
+    wf = next(w for w in client.get("/api/workflows").json() if w["name"] == "Legacy Vendor Sync")
+    client.patch(f"/api/workflows/{wf['id']}", json={"enabled": True})
+    bad = client.post(f"/api/workflows/{wf['id']}/run").json()
+    assert bad["status"] == "failed"
+    assert client.get("/api/dashboard").json()["last_failure"]["execution_id"] == bad["id"]
+    client.patch(f"/api/workflows/{wf['id']}", json={"enabled": False})  # leave the fixture as it was
+    _run_cod(client)
+    d = client.get("/api/dashboard").json()
+    assert d["last_failure"] is None and d["totals"]["failed"] >= 1  # still counted, just not flagged

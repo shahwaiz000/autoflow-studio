@@ -28,7 +28,7 @@ Finance and operations teams spend hours every day checking one list against ano
 - **Template and visual builder.** Start from the COD Reconciliation template, or draw your own with drag and drop. A drawing is checked before saving. Only a fixed list of step types can run, so no user-written code is executed.
 - **Assistant (rules-based, not an AI model).** Describe a reconciliation in plain English and get a proposed workflow with the reason for each step. It can also explain a workflow and summarise why runs failed. It is free and works offline.
 - **Login.** One owner account, scrypt password hashing, HttpOnly session cookie, lockout after five wrong passwords, origin check on changes.
-- **Tests.** 148 backend tests (pytest) and 67 frontend tests (Vitest).
+- **Tests.** 149 backend tests (pytest) and 67 frontend tests (Vitest).
 
 ## Not built yet
 
