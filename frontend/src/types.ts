@@ -94,4 +94,4 @@ export interface ExceptionRow {
   decision: string | null; decided_by: string | null; decided_at: string | null; note: string | null;
 }
 export interface ExceptionList { total: number; by_kind: Record<string, number>; labels: Record<string, string>; items: ExceptionRow[] }
-export interface RunResult { metrics: Record<string, number>; details: { left?: string; right?: string; summary?: string } & Record<string, unknown> }
+export interface RunResult { metrics: Record<string, number>; details: Record<string, unknown> }

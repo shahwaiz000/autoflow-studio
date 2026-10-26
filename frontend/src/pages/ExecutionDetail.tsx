@@ -21,7 +21,8 @@ const money = (n: number | null | undefined) => (n == null ? "-" : n.toLocaleStr
 
 function Reconciliation({ ex }: { ex: Execution }) {
   const m = ex.result?.metrics ?? {};
-  const d = ex.result?.details ?? {};
+  const raw = ex.result?.details as { comparisons?: Record<string, unknown>[] } | undefined;
+  const d = (raw?.comparisons?.[0] ?? {}) as { left?: string; right?: string; tolerance?: number | null };
   const [kind, setKind] = useState("");
   const { data, error, loading, reload } = useApi<ExceptionList>(`/executions/${ex.id}/exceptions${kind ? `?kind=${kind}` : ""}`);
   const tiles: [string, string | number][] = [

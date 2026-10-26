@@ -54,10 +54,11 @@ test("no download buttons when the run had no report step", async () => {
 test("a reconciliation run shows its totals and every exception with the reason and a CSV link", async () => {
   status = "success";
   steps = [{ position: 1, step_id: "s4", step_type: "compare", name: "Match", status: "success", attempts: 1, message: "ok", duration_ms: 1 }];
-  result = { metrics: { matched_rows: 55, exceptions: 2, amount_mismatches: 1, missing_in_right: 1, missing_in_left: 0, duplicate_keys: 0, amount_difference: 10, unmatched_amount: 50 }, details: { left: "courier", right: "bank", tolerance: 0.01 } };
+  result = { metrics: { matched_rows: 55, exceptions: 2, amount_mismatches: 1, missing_in_right: 1, missing_in_left: 0, duplicate_keys: 0, amount_difference: 10, unmatched_amount: 50 }, details: { comparisons: [{ left: "courier", right: "bank", tolerance: 0.01 }] } };
   show();
   expect(await screen.findByText("Reconciliation")).toBeInTheDocument();
   expect(screen.getByText("55")).toBeInTheDocument();
+  expect(screen.getByText(/courier compared with bank/)).toBeInTheDocument();
   expect(await screen.findByText("W100")).toBeInTheDocument();
   expect(screen.getByText("No bank deposit found")).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Exceptions (CSV)" })).toHaveAttribute("href", "/api/executions/4/download/exceptions");
