@@ -1,3 +1,5 @@
+import csv
+import io
 import logging
 import uuid
 from pathlib import Path
@@ -8,13 +10,14 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from . import analytics, assistant, auth, datasources, runqueue, schedules, tables
+from . import analytics, assistant, auth, datasources, reconcile, runqueue, schedules, tables
 from .config import settings
 from .database import Base, SessionLocal, engine, get_db
 from .engine import required_inputs, run_workflow
-from .models import Execution, Schedule, User, Workflow, iso, utcnow
+from .models import Execution, ExecutionException, Schedule, User, Workflow, iso, utcnow
 from .definitions import clean_definition
 from .seed import WORKFLOWS, seed
 from .templates import TEMPLATES
@@ -287,8 +290,41 @@ async def upload_csv(file: UploadFile = File(...), required_columns: str = Form(
     return {**ex.to_dict(with_steps=True), "metrics": getattr(ex, "result_metrics", {})}
 
 
+def _exceptions_csv(db: Session, eid: int) -> Response:
+    rows = db.query(ExecutionException).filter_by(execution_id=eid).order_by(ExecutionException.id).all()
+    if not rows:
+        raise HTTPException(404, "This execution has no exceptions")
+    out = io.StringIO()
+    w = csv.writer(out)
+    w.writerow(["type", "key", "row_in_first_table", "row_in_second_table", "first_amount", "second_amount", "difference", "reason", "decision", "decided_by", "note"])
+    for r in rows:  # text can come from the user's files, so it is neutralised for Excel
+        w.writerow([reconcile.KINDS[r.kind], analytics.safe_cell(r.key), r.left_row, r.right_row, r.left_amount, r.right_amount,
+                    r.difference, analytics.safe_cell(r.reason), r.decision or "", r.decided_by or "", analytics.safe_cell(r.note or "")])
+    return Response(out.getvalue(), media_type="text/csv", headers={"Content-Disposition": f'attachment; filename="execution_{eid}_exceptions.csv"'})
+
+
+EXCEPTION_KINDS = "^(" + "|".join(reconcile.KINDS) + ")$"
+
+
+@app.get("/api/executions/{eid}/exceptions")
+def list_exceptions(eid: int, kind: str | None = Query(None, pattern=EXCEPTION_KINDS), limit: int = Query(100, ge=1, le=500),
+                    offset: int = Query(0, ge=0), db: Session = Depends(get_db)):
+    """Everything a reconciliation run found that does not agree, worst problems first."""
+    if not db.get(Execution, eid):
+        raise HTTPException(404, f"Execution {eid} not found")
+    q = db.query(ExecutionException).filter_by(execution_id=eid)
+    by_kind = {k: n for k, n in db.query(ExecutionException.kind, func.count()).filter_by(execution_id=eid).group_by(ExecutionException.kind)}
+    if kind:
+        q = q.filter_by(kind=kind)
+    total = q.count()
+    items = q.order_by(ExecutionException.id).offset(offset).limit(limit).all()
+    return {"total": total, "by_kind": by_kind, "labels": reconcile.KINDS, "items": [i.to_dict() for i in items]}
+
+
 @app.get("/api/executions/{eid}/download/{kind}")
 def download(eid: int, kind: str, db: Session = Depends(get_db)):
+    if kind == "exceptions" and db.get(Execution, eid):
+        return _exceptions_csv(db, eid)
     if kind not in DOWNLOADS or not db.get(Execution, eid):
         raise HTTPException(404, "File not found")
     path = settings.reports_dir / f"execution_{eid}_{DOWNLOADS[kind]}"

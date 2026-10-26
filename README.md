@@ -25,11 +25,13 @@ A business workflow automation platform. You build workflows from simple steps, 
 - **Data Sources.** One page lists the CSV and Excel files workflows can read: the fictional sample files and your uploads. For each file it shows rows, columns, size and which workflows use it. You can add files, see Excel sheet names, preview the first rows and delete your own uploads. Uploads keep their original name for display but are stored under random names. Sample files cannot be deleted.
 - **Login.** The whole API is locked until you log in. The first time the app opens, you create one owner account (username, and a password of 10+ characters with a capital letter and a number). Passwords are hashed with scrypt, sessions are random tokens whose hash is stored, the cookie is HttpOnly, five wrong passwords lock that name for 10 minutes, changing the password logs out other devices, and changes sent from an unknown website are refused. It is built for one owner on a trusted computer: there are no roles, no password reset by email, and you should still serve it over HTTPS (and set AUTH_COOKIE_SECURE=true) before putting it on the internet. Set AUTH_ENABLED=false to turn login off.
 - **Background runs.** Clicking Run on the Workflows page puts the run in a queue and returns at once, so the page never freezes. One worker runs the waiting workflows one after another. The run shows as queued, then running, then success or failed, and the page updates itself. The queue is held in memory: if the backend restarts, runs that were waiting or running are marked failed with a clear message instead of staying busy forever. CSV uploads and the Assistant's "save and run" still run inside the request.
-- **Tests.** 143 backend tests (pytest) and 71 frontend tests (Vitest).
+- **Reconciliation (Phase 2).** A Compare step matches two tables on a key column (for example waybill against bank reference), then checks that the amounts agree within an allowed difference. Everything that does not agree becomes an exception with a reason in plain words: amount differs, missing in either table, duplicate key, unreadable amount, empty key. The run page shows totals and the exception list with a filter and a CSV download, and the Excel report gets an Exceptions sheet. Up to 5,000 exceptions per run are stored. The "COD Reconciliation" template and two fictional sample files (courier_collections.csv, bank_deposits.csv, with 7 planted differences) show it working. The assistant can build this workflow for that file pair.
+- **Matching rule.** Matching is one row to one row. A deposit that covers many parcels is not supported yet, and a duplicate key is flagged rather than matched twice.
+- **Tests.** 163 backend tests (pytest) and 73 frontend tests (Vitest).
 
 ## Not built yet
 
-Comparing or reconciling two tables (the engine can now hold two, but no step compares them yet; see docs/ROADMAP.md, Phase 2), approvals and an audit trail, a language-model assistant (the current assistant is rule-based), multiple users and roles. Notification steps only write to the log. Nothing is emailed. The old .xls format is not supported.
+Reviewing and approving exceptions (Phase 3), many-to-one matching, approvals and an audit trail, a language-model assistant (the current assistant is rule-based), multiple users and roles. Notification steps only write to the log. Nothing is emailed. The old .xls format is not supported.
 
 ## Technology (all free)
 
@@ -76,6 +78,7 @@ backend/app/
   tables.py       reading CSV and Excel files, and cleaning amounts, dates and text
   seed.py         fictional sample data (safe to run many times)
   templates.py    ready-made workflow templates
+  reconcile.py    the matching logic behind the Compare step
 frontend/src/
   pages/          Dashboard, Workflows, Builder, Editor, Templates, Executions, Analytics, Upload, Assistant, Schedules, Data Sources, Account
   flow.ts         layout and checks for the flow diagrams and the builder

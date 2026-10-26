@@ -10,7 +10,8 @@ from .engine import OPS, validate_definition
 
 ID_RE = re.compile(r"^[A-Za-z0-9_]{1,40}$")
 METRIC_FIELDS = ["invalid_rows", "missing_values", "duplicate_rows", "invalid_values", "rows_loaded", "rows_after_cleaning",
-                 "values_fixed", "values_unreadable"]
+                 "values_fixed", "values_unreadable", "matched_rows", "missing_in_right", "missing_in_left",
+                 "amount_mismatches", "duplicate_keys", "unreadable_amounts", "exceptions", "amount_difference", "unmatched_amount"]
 TRANSFORMS = ["trim_text", "drop_duplicates", "drop_missing", "drop_invalid_numbers",
               "normalize_amounts", "parse_dates", "standardize_text"]
 # which column list each cleaning option needs
@@ -21,6 +22,7 @@ KEYS = {
     "validate": {"required_columns", "numeric_columns", "fail_on_errors", "table"},
     "condition": {"field", "op", "value", "on_true", "on_false"},
     "transform": {"operations", "numeric_columns", "amount_columns", "date_columns", "text_columns", "dayfirst", "table"},
+    "compare": {"left", "right", "left_key", "right_key", "left_amount", "right_amount", "tolerance"},
     "notify": {"to", "message"}, "report": {"table"}, "end": set(),
 }
 
@@ -103,6 +105,28 @@ def _clean_config(t, cfg, where, errs):
         _table_ref(cfg, out, where, errs)
     elif t == "report":
         _table_ref(cfg, out, where, errs)
+    elif t == "compare":
+        for k in ("left", "right"):
+            if not isinstance(cfg.get(k), str) or not tables.TABLE_RE.match(cfg.get(k, "")):
+                errs.append(f"{where}: choose the {'first' if k == 'left' else 'second'} table")
+            out[k] = cfg.get(k)
+        if out["left"] and out["left"] == out["right"]:
+            errs.append(f"{where}: choose two different tables")
+        for k, label in (("left_key", "first"), ("right_key", "second")):
+            if not _text(cfg.get(k), 60) or not str(cfg.get(k, "")).strip():
+                errs.append(f"{where}: name the column that identifies each row in the {label} table")
+            out[k] = str(cfg.get(k, "")).strip()
+        la, ra = str(cfg.get("left_amount") or "").strip(), str(cfg.get("right_amount") or "").strip()
+        if bool(la) != bool(ra):
+            errs.append(f"{where}: name the amount column in both tables, or in neither")
+        elif la and not (_text(la, 60) and _text(ra, 60)):
+            errs.append(f"{where}: amount column names are too long")
+        elif la:
+            out["left_amount"], out["right_amount"] = la, ra
+        tol = cfg.get("tolerance", 0.01)
+        if isinstance(tol, bool) or not isinstance(tol, (int, float)) or not 0 <= tol <= 1_000_000:
+            errs.append(f"{where}: the allowed difference must be a number from 0 up")
+        out["tolerance"] = tol
     elif t == "notify":
         out = {"to": cfg.get("to", ""), "message": cfg.get("message", "")}
         if not _text(out["to"], 120) or not _text(out["message"], 300):
@@ -167,7 +191,10 @@ def _check_tables(steps: list[dict]) -> list[str]:
                     errs.append(f"Two Load steps ask for the run-time file '{s['config']['input']}'")
                 inputs.append(s["config"]["input"])
     for s in steps:
-        t = s["config"].get("table") if s["type"] in ("validate", "transform", "report") else None
-        if t and t not in loaded:
-            errs.append(f"Step '{s['name']}' uses the table '{t}', but no Load step creates it")
+        refs = [s["config"].get("table")] if s["type"] in ("validate", "transform", "report") else []
+        if s["type"] == "compare":
+            refs = [s["config"].get("left"), s["config"].get("right")]
+        for t in refs:
+            if t and t not in loaded:
+                errs.append(f"Step '{s['name']}' uses the table '{t}', but no Load step creates it")
     return errs

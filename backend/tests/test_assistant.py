@@ -24,7 +24,7 @@ def types(p):
 def test_info_is_honest_about_not_being_an_ai_model(client):
     d = client.get("/api/assistant/info").json()
     assert d["provider"] == "rules" and d["uses_ai_model"] is False
-    assert {x["file"] for x in d["datasets"]} == {"invoices.csv", "employees.csv", "customers.csv", "sales_orders.csv"}
+    assert {x["file"] for x in d["datasets"]} == {"invoices.csv", "employees.csv", "customers.csv", "sales_orders.csv", "courier_collections.csv", "bank_deposits.csv"}
     assert any("Nothing is emailed" in x for x in d["limits"])
     assert all(x["columns"] for x in d["datasets"])  # read from the real sample files
 
@@ -77,7 +77,7 @@ def test_threshold_and_recipient_are_taken_from_the_request(client):
 def test_unsupported_wishes_are_reported_not_hidden(client):
     p = propose(client, "Every Monday check the invoices and send a Slack message")
     text = " ".join(p["warnings"])
-    assert "Schedules page" in text and "Only CSV files are supported" in text
+    assert "Schedules page" in text and "Only CSV and Excel files are supported" in text
 
 
 def test_stop_and_alert_conflict_is_explained(client):
@@ -134,3 +134,17 @@ def test_failure_insights_match_the_analytics_numbers(client):
 def test_failure_insights_reject_bad_parameters(client):
     assert client.get("/api/assistant/failures", params={"source": "everything"}).status_code == 422
     assert client.get("/api/assistant/failures", params={"days": 0}).status_code == 422
+
+
+def test_reconcile_request_builds_a_compare_workflow(client):
+    p = propose(client, "Reconcile courier collections with bank deposits and alert finance if anything does not match")
+    assert p["status"] == "ok"
+    types = [s["type"] for s in p["steps"]]
+    assert "compare" in types and "notify" in types and "condition" in types
+    run = save_and_run(client, p)
+    assert run["status"] == "success" and run["result"]["metrics"]["exceptions"] == 7
+
+
+def test_reconcile_request_for_unknown_files_asks_for_detail(client):
+    p = propose(client, "Reconcile my SAP ledger with the bank")
+    assert p["status"] == "needs_detail" and "COD Reconciliation" in p["message"]

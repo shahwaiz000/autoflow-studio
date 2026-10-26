@@ -52,6 +52,9 @@ class Execution(Base):
         back_populates="execution", order_by="ExecutionStep.position", cascade="all, delete-orphan")
     inputs: Mapped[list["ExecutionInput"]] = relationship(
         back_populates="execution", order_by="ExecutionInput.id", cascade="all, delete-orphan")
+    exceptions: Mapped[list["ExecutionException"]] = relationship(
+        back_populates="execution", order_by="ExecutionException.id", cascade="all, delete-orphan")
+    result: Mapped["ExecutionResult | None"] = relationship(back_populates="execution", uselist=False, cascade="all, delete-orphan")
 
     def to_dict(self, with_steps: bool = False) -> dict:
         d = {
@@ -64,6 +67,7 @@ class Execution(Base):
         }
         if with_steps:
             d["steps"] = [s.to_dict() for s in self.steps]
+            d["result"] = self.result.to_dict() if self.result else None
         return d
 
 
@@ -162,3 +166,43 @@ class ExecutionInput(Base):
 
     def to_dict(self) -> dict:
         return {"name": self.name, "source": self.source, "file": self.file}
+
+
+class ExecutionResult(Base):
+    """The numbers and facts a run produced (rows loaded, matched, exceptions...), kept after the run ends."""
+    __tablename__ = "execution_results"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    execution_id: Mapped[int] = mapped_column(ForeignKey("executions.id"), unique=True)
+    metrics: Mapped[dict] = mapped_column(JSON, default=dict)
+    details: Mapped[dict] = mapped_column(JSON, default=dict)
+    execution: Mapped[Execution] = relationship(back_populates="result")
+
+    def to_dict(self) -> dict:
+        return {"metrics": self.metrics, "details": self.details}
+
+
+class ExecutionException(Base):
+    """One thing a reconciliation found that does not agree, with the reason in plain words.
+    The decision columns are filled when a person reviews it."""
+    __tablename__ = "execution_exceptions"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    execution_id: Mapped[int] = mapped_column(ForeignKey("executions.id"))
+    kind: Mapped[str] = mapped_column(String(30))
+    key: Mapped[str] = mapped_column(String(120), default="")
+    left_row: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    right_row: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    left_amount: Mapped[float | None] = mapped_column(Float, nullable=True)
+    right_amount: Mapped[float | None] = mapped_column(Float, nullable=True)
+    difference: Mapped[float | None] = mapped_column(Float, nullable=True)
+    reason: Mapped[str] = mapped_column(Text, default="")
+    decision: Mapped[str | None] = mapped_column(String(20), nullable=True)   # approved | rejected
+    decided_by: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    note: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    execution: Mapped[Execution] = relationship(back_populates="exceptions")
+
+    def to_dict(self) -> dict:
+        return {"id": self.id, "kind": self.kind, "key": self.key, "left_row": self.left_row, "right_row": self.right_row,
+                "left_amount": self.left_amount, "right_amount": self.right_amount, "difference": self.difference,
+                "reason": self.reason, "decision": self.decision, "decided_by": self.decided_by,
+                "decided_at": iso(self.decided_at), "note": self.note}

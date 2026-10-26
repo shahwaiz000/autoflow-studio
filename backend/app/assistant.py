@@ -30,11 +30,16 @@ DATASETS = [
          words=r"customers?|clients?|contacts?|mailing list|email list", required=["customer_id", "email"], numeric=[]),
     dict(label="Sales orders", noun="sales order", file="sales_orders.csv", category="Sales", alert_to="sales@example.com",
          words=r"sales|orders?|revenue|regions?", required=["order_id", "region", "revenue"], numeric=["revenue", "units"]),
+    dict(label="Courier collections", noun="collection", file="courier_collections.csv", category="Finance", alert_to="finance@example.com",
+         words=r"courier|cod|collections?|waybills?|parcels?|deliver\w*", required=["waybill", "courier", "cod_amount"], numeric=["cod_amount"]),
+    dict(label="Bank deposits", noun="deposit", file="bank_deposits.csv", category="Finance", alert_to="finance@example.com",
+         words=r"bank|deposits?|settlements?|remittances?", required=["reference", "amount"], numeric=[]),
 ]
+PAIR = dict(left=DATASETS[4], right=DATASETS[5], left_key="waybill", right_key="reference", left_amount="cod_amount", right_amount="amount")
 
 LIMITS = [
     "It follows rules and keywords. It is not an AI language model and does not understand every sentence.",
-    "It can only build workflows from the four sample CSV files and the built-in step types.",
+    "It can only build workflows from the sample files and the built-in step types. Reconciliation works for one pair: courier collections against bank deposits.",
     "Notifications are recorded in the run log only. Nothing is emailed or sent.",
     "The assistant does not set schedules. Save the workflow, then add a schedule on the Schedules page.",
 ]
@@ -82,11 +87,73 @@ def _unique_name(db: Session, name: str) -> str:
     return candidate
 
 
+RECONCILE = r"reconcil\w*|compare|comparing|match|matching|cross-?check|versus|vs"
+
+
+def _propose_reconcile(db: Session, request: str, text: str, base: dict) -> dict:
+    """A request to compare two sources. Only the courier-versus-bank pair is known, so say so plainly otherwise."""
+    left_hit = _has(text, PAIR["left"]["words"])
+    right_hit = _has(text, PAIR["right"]["words"])
+    if not (left_hit and right_hit):
+        return {**base, "message": "I can build a reconciliation for one pair of sample files: courier collections against bank deposits. "
+                "Mention both, for example: \"Reconcile courier collections with bank deposits and alert finance if anything does not match.\" "
+                "For your own two files, use the template 'COD Reconciliation' and choose your files when you run it."}
+    wants_alert = _has(text, r"alert|notif\w*|warn|tell|inform|e-?mail|message|let me know|flag|ping")
+    L, R = PAIR["left"], PAIR["right"]
+    tol = 0.01
+    m = re.search(r"\b(?:within|tolerance of|up to|allow\w*)\s+(\d{1,4}(?:\.\d{1,2})?)\b", text)
+    if m:
+        tol = float(m.group(1))
+    recipient = next(iter(EMAIL.findall(request)), None) or L["alert_to"]
+    blocks = [
+        ("trigger", "Start", {}, "Every workflow needs a start. It begins when you click Run."),
+        ("load_csv", "Courier collections", {"file": L["file"], "table": "courier"}, f"You mentioned courier collections, so I chose {L['file']}."),
+        ("load_csv", "Bank deposits", {"file": R["file"], "table": "bank"}, f"You mentioned bank deposits, so I chose {R['file']}."),
+        ("compare", "Match collections to deposits",
+         {"left": "courier", "right": "bank", "left_key": PAIR["left_key"], "right_key": PAIR["right_key"],
+          "left_amount": PAIR["left_amount"], "right_amount": PAIR["right_amount"], "tolerance": tol},
+         f"Matches each waybill to its bank reference and compares the amounts, allowing a difference of {tol:g}. "
+         "Everything that does not agree is listed with a reason."),
+    ]
+    if wants_alert:
+        blocks += [("condition", "Any exceptions?", {"field": "exceptions", "op": ">", "value": 0},
+                    "You want an alert only when something does not match, so this step checks if there are any exceptions."),
+                   ("notify", f"Alert {recipient.split('@')[0]}", {"to": recipient, "message": "Collections and deposits do not fully match"},
+                    f"Sends the alert to {recipient} (recorded in the run log; nothing is emailed).")]
+    blocks += [("report", "Excel report", {"table": "courier"}, "Writes an Excel workbook that includes an Exceptions sheet."),
+               ("end", "Done", {}, "Marks the end of the workflow.")]
+    ids = [f"s{i}" for i in range(1, len(blocks) + 1)]
+    steps, notes = [], []
+    for i, (typ, name, cfg, why) in enumerate(blocks):
+        step = {"id": ids[i], "type": typ, "name": name, "config": dict(cfg)}
+        if typ == "condition":
+            step["config"]["on_true"], step["config"]["on_false"] = ids[i + 1], ids[i + 2]
+        if typ == "notify":
+            step["next"] = ids[i + 1]
+        steps.append(step)
+        notes.append({"step": name, "why": why})
+    definition, errors = clean_definition(steps)
+    if errors:
+        return {**base, "message": "I built a draft that did not pass the safety check: " + "; ".join(errors)}
+    warnings = ["Matching is one row to one row on the waybill number. Many-to-one matching (one deposit for many parcels) is not supported."]
+    if _has(text, r"every|daily|weekly|monthly|hourly|schedule\w*"):
+        warnings.append("The assistant does not set schedules. Save the workflow, then add a schedule on the Schedules page.")
+    return {
+        "status": "ok", "request": request, "provider": PROVIDER, "uses_ai_model": False,
+        "name": _unique_name(db, "COD reconciliation" + (" and alert" if wants_alert else "")), "category": "Finance",
+        "description": f"Built by the assistant from: \"{request.strip()[:300]}\"",
+        "dataset": {"label": "Courier collections and bank deposits", "file": f"{L['file']} + {R['file']}", "columns": _columns(L["file"])},
+        "steps": definition["steps"], "reasons": notes, "warnings": warnings,
+    }
+
+
 def propose(db: Session, request: str) -> dict:
     text = " ".join(request.lower().split())
-    ds, others = _pick_dataset(text)
     base = {"status": "needs_detail", "request": request, "provider": PROVIDER, "uses_ai_model": False,
             "steps": [], "reasons": [], "warnings": []}
+    if _has(text, RECONCILE):
+        return _propose_reconcile(db, request, text, base)
+    ds, others = _pick_dataset(text)
     if ds is None:
         return {**base, "message": "I could not tell which data you want to work with. Mention one of: "
                 + ", ".join(d["label"].lower() for d in DATASETS) + ". For example: \"Check invoices and alert finance if any are incomplete.\""}
@@ -96,8 +163,8 @@ def propose(db: Session, request: str) -> dict:
         warnings.append(f"A workflow uses one file, so I used {ds['file']}. I ignored: " + ", ".join(o["file"] for o in others) + ".")
     if _has(text, r"every|daily|weekly|monthly|hourly|each (?:day|week|month|morning)|schedule\w*|at \d{1,2}(?::\d{2})? ?(?:am|pm)"):
         warnings.append("The assistant does not set schedules. Save the workflow, then add a schedule on the Schedules page.")
-    if _has(text, r"slack|sms|whatsapp|teams|telegram|database|sql|sap|api|excel|xlsx|sharepoint|google sheets?|pdf"):
-        warnings.append("Only CSV files are supported, so I used a sample CSV. Other systems are not connected.")
+    if _has(text, r"slack|sms|whatsapp|teams|telegram|database|sql|sap|api|sharepoint|google sheets?|pdf"):
+        warnings.append("Only CSV and Excel files are supported, and I can only use the sample files. Other systems are not connected.")
 
     wants_alert = _has(text, r"alert|notif\w*|warn|tell|inform|e-?mail|message|let me know|remind|flag|ping")
     only_on_problem = wants_alert and _has(text, PROBLEM) and _has(text, r"only|if|when|whenever|unless|once|any")
@@ -203,8 +270,15 @@ def propose(db: Session, request: str) -> dict:
 
 OP_WORDS = {">": "is more than", ">=": "is at least", "<": "is less than", "<=": "is at most", "==": "equals", "!=": "is not"}
 TRANSFORM_WORDS = {"trim_text": "trims extra spaces", "drop_duplicates": "removes duplicate rows",
-                   "drop_missing": "removes rows with empty cells", "drop_invalid_numbers": "removes rows where a number column holds text"}
-FIELD_WORDS = {"invalid_rows": "problem rows", "missing_values": "empty cells", "duplicate_rows": "duplicate rows",
+                   "drop_missing": "removes rows with empty cells", "drop_invalid_numbers": "removes rows where a number column holds text",
+                   "normalize_amounts": "turns amounts written as text into numbers", "parse_dates": "makes dates one format (YYYY-MM-DD)",
+                   "standardize_text": "tidies text (trim, single spaces, capitals)"}
+FIELD_WORDS = {"matched_rows": "rows that matched", "missing_in_right": "rows missing in the second table",
+               "missing_in_left": "rows missing in the first table", "amount_mismatches": "amount differences",
+               "duplicate_keys": "duplicate keys", "unreadable_amounts": "unreadable amounts", "exceptions": "exceptions",
+               "amount_difference": "total amount difference", "unmatched_amount": "unmatched amount",
+               "values_fixed": "values reformatted", "values_unreadable": "values that could not be read",
+               "invalid_rows": "problem rows", "missing_values": "empty cells", "duplicate_rows": "duplicate rows",
                "invalid_values": "non-numeric values", "rows_loaded": "rows loaded", "rows_after_cleaning": "rows left after cleaning"}
 
 
@@ -213,7 +287,15 @@ def _describe(step: dict, names: dict) -> str:
     if t == "trigger":
         return "Starts the workflow when a file is uploaded." if c.get("kind") == "upload" else "Starts the workflow when you click Run."
     if t == "load_csv":
-        return f"Reads the file {c.get('file', '?')} into a table."
+        table = c.get("table") or "main"
+        if c.get("input"):
+            return f"Asks you to choose a file when you run the workflow, and reads it into the table '{table}'."
+        return f"Reads the file {c.get('file', '?')} into the table '{table}'."
+    if t == "compare":
+        s = (f"Matches the rows of '{c.get('left')}' to '{c.get('right')}' using {c.get('left_key')} and {c.get('right_key')}")
+        if c.get("left_amount"):
+            s += f", and checks that {c['left_amount']} and {c['right_amount']} agree within {c.get('tolerance', 0.01):g}"
+        return s + ". Everything that does not agree becomes an exception with a reason."
     if t == "validate":
         parts = []
         if c.get("required_columns"):

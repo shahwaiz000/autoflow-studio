@@ -11,9 +11,9 @@ from pathlib import Path
 import pandas as pd
 from sqlalchemy.orm import Session
 
-from . import tables
+from . import reconcile, tables
 from .config import settings
-from .models import Execution, ExecutionInput, ExecutionStep, Workflow, utcnow
+from .models import Execution, ExecutionException, ExecutionInput, ExecutionResult, ExecutionStep, Workflow, utcnow
 
 log = logging.getLogger("autoflow.engine")
 
@@ -36,6 +36,7 @@ class Context:
         self.frames: dict[str, pd.DataFrame] = {}  # every loaded table, by name
         self.current: str = "main"
         self.inputs: dict[str, dict] = {}          # files chosen for this run: name -> {source, file}
+        self.exceptions: pd.DataFrame | None = None  # what the Compare steps found
         self.metrics: dict = {"invalid_rows": 0, "missing_values": 0}
         self.details: dict = {}
         self.execution_id: int | None = None
@@ -189,6 +190,26 @@ def h_transform(cfg, ctx):
     return msg
 
 
+def h_compare(cfg, ctx):
+    """Match two loaded tables on a key (and optionally an amount) and list what does not agree."""
+    for side in ("left", "right"):
+        name = cfg.get(side)
+        if name not in ctx.frames:
+            raise StepError(f"Table '{name}' has not been loaded. Add a Load step for it before the Compare step")
+    left, right = ctx.frames[cfg["left"]], ctx.frames[cfg["right"]]
+    cols = [(cfg["left"], left, cfg["left_key"]), (cfg["right"], right, cfg["right_key"])]
+    if cfg.get("left_amount") and cfg.get("right_amount"):
+        cols += [(cfg["left"], left, cfg["left_amount"]), (cfg["right"], right, cfg["right_amount"])]
+    for name, df, col in cols:
+        if col not in df.columns:
+            raise StepError(f"Missing required columns: '{col}' is not in table '{name}'. Columns there: {', '.join(map(str, df.columns))}")
+    out, metrics, details = reconcile.compare(left, right, cfg)
+    ctx.metrics.update(metrics)
+    ctx.details.setdefault("comparisons", []).append(details)
+    ctx.exceptions = out if ctx.exceptions is None else pd.concat([ctx.exceptions, out], ignore_index=True)
+    return reconcile.summary_line(metrics, cfg["left"], cfg["right"])
+
+
 def h_notify(cfg, ctx):
     # v0.1: notifications are recorded in the log only (nothing is sent externally).
     return f"Notification recorded for {cfg.get('to', 'team')}: {cfg.get('message', '')}"
@@ -230,6 +251,13 @@ def h_report(cfg, ctx):
         pd.DataFrame(facts, columns=["What", "Value"]).to_excel(xw, sheet_name="Summary", index=False)
         prof.to_excel(xw, sheet_name="Columns", index=False)
         safe.to_excel(xw, sheet_name="Data", index=False)
+        if ctx.exceptions is not None and len(ctx.exceptions):
+            ex_out = ctx.exceptions.head(reconcile.MAX_EXCEPTIONS).copy()
+            ex_out["kind"] = ex_out["kind"].map(reconcile.KINDS)
+            for c in ("key", "reason"):
+                ex_out[c] = ex_out[c].map(lambda v: safe_cell(v) if isinstance(v, str) else v)
+            ex_out.columns = ["Type", "Key", "Row in first table", "Row in second table", "First amount", "Second amount", "Difference", "Reason"]
+            ex_out.to_excel(xw, sheet_name="Exceptions", index=False)
         for ws in xw.book.worksheets:
             ws.freeze_panes = "A2"
             for col in ws.columns:
@@ -244,7 +272,7 @@ def h_end(cfg, ctx):
 
 HANDLERS = {
     "trigger": h_trigger, "load_csv": h_load_csv, "validate": h_validate,
-    "condition": h_condition, "transform": h_transform, "notify": h_notify,
+    "condition": h_condition, "transform": h_transform, "compare": h_compare, "notify": h_notify,
     "report": h_report, "end": h_end,
 }
 
@@ -328,11 +356,44 @@ def execute(db: Session, ex: Execution, definition: dict | None = None) -> Execu
         log.exception("Unexpected engine error")
         ex.status, ex.error_message = "failed", f"Unexpected error: {type(e).__name__}"
     ex.result_metrics = {**ctx.metrics, **ctx.details}
+    _save_results(db, ex, ctx)
     ex.finished_at = utcnow()
     ex.duration_seconds = round(time.perf_counter() - t0, 3)
     db.commit()
     log.info("Execution %s of '%s' finished: %s", ex.id, workflow.name, ex.status)
     return ex
+
+
+def _plain(v):
+    """Make numbers from pandas/numpy safe to store as JSON."""
+    if isinstance(v, dict):
+        return {str(k): _plain(x) for k, x in v.items()}
+    if isinstance(v, (list, tuple)):
+        return [_plain(x) for x in v]
+    if hasattr(v, "item"):
+        v = v.item()
+    return None if isinstance(v, float) and v != v else v
+
+
+def _int(v):
+    v = _plain(v)
+    return None if v is None else int(v)
+
+
+def _save_results(db, ex, ctx):
+    """Keep the run's numbers and every exception with the run, so they can be looked at later."""
+    saved = ctx.exceptions.head(reconcile.MAX_EXCEPTIONS) if ctx.exceptions is not None else None
+    details = _plain(ctx.details)
+    if saved is not None and len(ctx.exceptions) > len(saved):
+        details["exceptions_saved"] = len(saved)  # the counts still cover every row
+    ex.result = ExecutionResult(metrics=_plain(ctx.metrics), details=details)
+    if saved is not None:
+        for r in saved.itertuples(index=False):
+            ex.exceptions.append(ExecutionException(
+                kind=r.kind, key=str(r.key)[:120], left_row=_int(r.left_row), right_row=_int(r.right_row),
+                left_amount=_plain(r.left_amount), right_amount=_plain(r.right_amount), difference=_plain(r.difference),
+                reason=r.reason))
+    db.commit()
 
 
 def _run_step(db, ex, step, pos, ctx):

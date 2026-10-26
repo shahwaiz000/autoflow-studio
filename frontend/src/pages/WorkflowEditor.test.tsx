@@ -14,3 +14,10 @@ it("starts with two steps and can add and remove a step", async () => {
   fireEvent.click(screen.getAllByRole("button", { name: "Remove" })[2]);
   expect(screen.queryByLabelText("Step 3 name")).not.toBeInTheDocument();
 });
+
+it("offers a compare step with the matching columns and allowed difference", async () => {
+  render(<MemoryRouter><WorkflowEditor /></MemoryRouter>);
+  fireEvent.change(await screen.findByLabelText("Step 2 type"), { target: { value: "compare" } });
+  expect(await screen.findByText("Matching column in the first table")).toBeInTheDocument();
+  expect(screen.getByLabelText("Allowed difference")).toHaveValue(0.01);
+});

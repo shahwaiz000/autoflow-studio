@@ -76,6 +76,34 @@ def make_samples() -> None:
         "paid_on": [pay_date(i) for i in range(36)],
     }).to_csv(d / "messy_payments.csv", index=False)
 
+    # Fictional cash-on-delivery reconciliation pair. The differences are planted on purpose, so the
+    # right answer is known: 55 rows match and 7 do not (3 missing in the bank file, 2 amount differences,
+    # 1 only in the bank file, 1 duplicate in the courier file). A few keys are written untidily and still match.
+    r3 = random.Random(21)
+    waybills = [f"WB-{70001 + i}" for i in range(60)]
+    amounts = [round(r3.uniform(40, 1800), 2) for _ in range(60)]
+    couriers = ["Falcon Express", "Desert Wind Couriers", "Red Sea Delivery"]
+    courier = pd.DataFrame({
+        "waybill": waybills,
+        "delivered_on": [f"2026-10-{1 + i % 25:02d}" for i in range(60)],
+        "courier": [r3.choice(couriers) for _ in range(60)],
+        "cod_amount": amounts,
+    })
+    courier = pd.concat([courier, courier.iloc[[5]]], ignore_index=True)  # the same waybill entered twice
+    skip = {7, 23, 41}                      # collected, but never deposited
+    short = {12: -15.00, 30: 0.50}          # deposited with the wrong amount
+    bank_rows = []
+    for i, (wb, amt) in enumerate(zip(waybills, amounts)):
+        if i in skip:
+            continue
+        paid = round(amt + short.get(i, 0), 2)
+        ref = wb.lower() if i % 17 == 3 else (f" {wb} " if i % 19 == 4 else wb)  # untidy but still the same waybill
+        bank_rows.append({"reference": ref, "deposit_date": f"2026-10-{2 + i % 25:02d}",
+                          "amount": f"SAR {paid:,.2f}" if i % 11 == 2 else paid})
+    bank_rows.append({"reference": "WB-79999", "deposit_date": "2026-10-27", "amount": 120.00})  # deposited, nobody collected it
+    courier.to_csv(d / "courier_collections.csv", index=False)
+    pd.DataFrame(bank_rows).to_csv(d / "bank_deposits.csv", index=False)
+
 
 WORKFLOWS = [
     dict(name="Invoice Processing", category="Finance",

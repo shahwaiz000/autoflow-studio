@@ -11,7 +11,7 @@ Written for Shahwaiz. Read it out loud a few times. Every claim below is true of
 1. **The problem.** Repeated data work (reconciliation, checks, cleaning) is done by hand and errors slip in. A workflow tool makes the steps visible, repeatable and logged.
 2. **What it does.** Drag-and-drop builder, form editor, templates, a run history with a flow diagram that colors the path a run took, CSV upload and cleaning, analytics, schedules, a Data Sources page, login, a background queue, and a rules-based assistant.
 3. **How it is built.** React + TypeScript on the front, FastAPI + SQLAlchemy + SQLite + Pandas on the back. Workflows are stored as JSON data, and the engine only runs a fixed list of step types.
-4. **How I checked it.** 100 backend tests and 57 frontend tests, plus I ran the real server and tried the features end to end.
+4. **How I checked it.** 163 backend tests and 73 frontend tests, plus I ran the real server and tried the features end to end.
 5. **What it is not.** A single-owner local tool. It is not ready for the internet or many users, and I know why (see "Limits").
 
 ## How a run works (draw this on a whiteboard)

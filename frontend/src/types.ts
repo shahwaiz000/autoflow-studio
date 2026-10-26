@@ -4,7 +4,7 @@ export interface Execution {
   id: number; workflow_id: number; workflow_name: string; status: Status;
   trigger_type: string; started_at: string; finished_at: string | null;
   duration_seconds: number | null; error_message: string | null; is_demo: boolean;
-  steps?: Step[]; inputs?: RunInput[];
+  steps?: Step[]; inputs?: RunInput[]; result?: RunResult | null;
 }
 export interface RunInput { name: string; source: "samples" | "uploads"; file: string }
 export interface WorkflowInput { name: string; label: string }
@@ -87,3 +87,11 @@ export interface DataCatalog { samples: DataFile[]; uploads: DataFile[] }
 export interface DataPreview { name: string; readable: boolean; columns: string[]; rows: string[][] }
 
 export interface AuthStatus { auth_enabled: boolean; needs_setup: boolean; user: { username: string } | null }
+
+export interface ExceptionRow {
+  id: number; kind: string; key: string; left_row: number | null; right_row: number | null;
+  left_amount: number | null; right_amount: number | null; difference: number | null; reason: string;
+  decision: string | null; decided_by: string | null; decided_at: string | null; note: string | null;
+}
+export interface ExceptionList { total: number; by_kind: Record<string, number>; labels: Record<string, string>; items: ExceptionRow[] }
+export interface RunResult { metrics: Record<string, number>; details: { left?: string; right?: string; summary?: string } & Record<string, unknown> }
