@@ -6,12 +6,14 @@ Written for Shahwaiz. Read it out loud a few times. Every claim below is true of
 
 "AutoFlow Studio automates the reconciliation I do every day at work: matching courier cash-on-delivery collections against bank deposits. You give it the two files, it matches every waybill to its bank reference, compares the amounts, and gives back a short list of exceptions, each with a plain reason: missing deposit, amount differs, duplicate, and so on. It runs on a schedule, keeps a history of every run, and produces an Excel report. Under the hood it is a small workflow engine, so the same steps can be rearranged for other matching jobs. All the data in it is fictional."
 
+**Why I built the POS version.** It comes from a real problem in my cashier work: drivers collect payments on POS machines, we close their orders in the system, and later it is hard to prove the recorded amounts match what the POS actually collected. The same matching engine answers it, because it only needs a key and an amount on each side. I added a per-driver summary, since the useful question is "which driver is off, and by how much". All data is fictional.
+
 ## The 2-minute version (if they say "tell me more")
 
 1. **The problem.** Finance teams compare two lists by hand every day (what couriers collected against what reached the bank), and differences get missed. The tool finds every difference and explains it, so people only review what is wrong.
 2. **What it does.** A Compare step with exceptions and reasons, Excel and CSV reports, an overview of the latest reconciliation, run history with a flow diagram, schedules, files chosen at run time, a drag-and-drop builder for custom rules, login, a background queue, and a rules-based assistant that builds reconciliation workflows.
 3. **How it is built.** React + TypeScript on the front, FastAPI + SQLAlchemy + SQLite + Pandas on the back. Workflows are stored as JSON data, and the engine only runs a fixed list of step types.
-4. **How I checked it.** 179 backend tests and 82 frontend tests, plus I ran the real server and tried the features end to end.
+4. **How I checked it.** 186 backend tests and 83 frontend tests, plus I ran the real server and tried the features end to end.
 5. **What it is not.** A single-owner local tool. It is not ready for the internet or many users, and I know why (see "Limits").
 
 ## How a run works (draw this on a whiteboard)

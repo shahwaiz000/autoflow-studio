@@ -66,8 +66,41 @@ def make_samples() -> None:
         bank_rows.append({"reference": ref, "deposit_date": f"2026-10-{2 + i % 25:02d}",
                           "amount": f"SAR {paid:,.2f}" if i % 11 == 2 else paid})
     bank_rows.append({"reference": "WB-79999", "deposit_date": "2026-10-27", "amount": 120.00})  # deposited, nobody collected it
+    _make_pos_samples(d)
     courier.to_csv(d / "courier_collections.csv", index=False)
     pd.DataFrame(bank_rows).to_csv(d / "bank_deposits.csv", index=False)
+
+
+def _make_pos_samples(d) -> None:
+    """Fictional POS collection pair: orders closed in the system, and what the drivers' POS machines actually collected.
+    The problems are planted, so the right answer is known: 53 of 60 orders match and 10 rows are exceptions
+    (2 orders with no POS payment, 5 wrong amounts, 2 POS payments with no order, 1 payment swiped twice)."""
+    r = random.Random(31)
+    drivers = [f"DRV-{101 + i}" for i in range(5)]
+    n = 60
+    order_ids = [f"ORD-{50001 + i}" for i in range(n)]
+    amounts = [round(r.choice([r.uniform(25, 400), r.uniform(400, 900)]), 2) for _ in range(n)]
+    system = pd.DataFrame({
+        "order_id": order_ids,
+        "closed_on": [f"2026-10-{1 + i % 25:02d}" for i in range(n)],
+        "driver": [drivers[i % 5] for i in range(n)],
+        "amount": amounts,
+    })
+    skip = {9, 33}                                                          # order closed, no POS payment
+    wrong = {4: -18.00, 15: 10.00, 27: -90.00, 38: -0.50, 52: 5.00}         # POS collected a different amount
+    rows = []
+    for i, (oid, amt) in enumerate(zip(order_ids, amounts)):
+        if i in skip:
+            continue
+        paid = round(amt + wrong.get(i, 0), 2)
+        ref = oid.lower() if i % 13 == 3 else (f" {oid} " if i % 17 == 5 else oid)  # untidy, still the same order
+        rows.append({"pos_ref": f"TXN-{90001 + i}", "order_id": ref, "driver": drivers[i % 5], "terminal": f"POS-{1 + i % 5}",
+                     "collected_at": f"2026-10-{1 + i % 25:02d}", "amount": f"SAR {paid:,.2f}" if i % 11 == 2 else paid})
+    rows.append({**rows[19], "pos_ref": "TXN-90999"})                       # the same payment swiped and recorded twice
+    rows.append({"pos_ref": "TXN-91001", "order_id": "ORD-59901", "driver": drivers[0], "terminal": "POS-1", "collected_at": "2026-10-26", "amount": 140.00})
+    rows.append({"pos_ref": "TXN-91002", "order_id": "ORD-59902", "driver": drivers[2], "terminal": "POS-3", "collected_at": "2026-10-27", "amount": 75.50})
+    system.to_csv(d / "pos_system_orders.csv", index=False)
+    pd.DataFrame(rows).to_csv(d / "pos_collections.csv", index=False)
 
 
 def _cod_workflow() -> dict:

@@ -48,6 +48,42 @@ def _money(v):
 
 def compare(left: pd.DataFrame, right: pd.DataFrame, cfg: dict) -> tuple[pd.DataFrame, dict, dict]:
     """Returns (exceptions table, metrics for conditions, details for the run page)."""
+    return compare_full(left, right, cfg)[:3]
+
+
+def _group_of(frame: pd.DataFrame, col: str, row):
+    """The value of the grouping column on a 1-based sheet row (row 1 is the header), or None."""
+    if row is None or pd.isna(row) or col not in frame.columns:
+        return None
+    v = frame.iloc[int(row) - 2][col]
+    return None if pd.isna(v) or not str(v).strip() else " ".join(str(v).split())
+
+
+def by_group(out: pd.DataFrame, left: pd.DataFrame, right: pd.DataFrame, col: str) -> list[dict]:
+    """Exceptions and money at stake for each value of one column (for example each driver).
+    The value comes from the first table; rows that exist only in the second table use the second table's column."""
+    rows: dict[str, dict] = {}
+    for r in out.itertuples():
+        g = _group_of(left, col, r.left_row) or _group_of(right, col, r.right_row) or "Unknown"
+        e = rows.setdefault(g, {"group": g, "exceptions": 0, "net_difference": 0.0, "no_partner": 0.0, "at_risk": 0.0})
+        e["exceptions"] += 1
+        if r.kind == "amount_mismatch" and r.difference is not None and not pd.isna(r.difference):
+            e["net_difference"] += float(r.difference)
+            e["at_risk"] += abs(float(r.difference))
+        elif r.kind == "missing_in_right" and r.left_amount is not None and not pd.isna(r.left_amount):
+            e["no_partner"] += abs(float(r.left_amount)); e["at_risk"] += abs(float(r.left_amount))
+        elif r.kind == "missing_in_left" and r.right_amount is not None and not pd.isna(r.right_amount):
+            e["no_partner"] += abs(float(r.right_amount)); e["at_risk"] += abs(float(r.right_amount))
+    totals = left[col].map(lambda v: None if pd.isna(v) else " ".join(str(v).split())).value_counts().to_dict() if col in left.columns else {}
+    out_rows = []
+    for e in rows.values():
+        out_rows.append({"group": e["group"], "rows": int(totals.get(e["group"], 0)), "exceptions": e["exceptions"],
+                         "net_difference": round(e["net_difference"], 2), "no_partner": round(e["no_partner"], 2), "at_risk": round(e["at_risk"], 2)})
+    return sorted(out_rows, key=lambda x: (-x["at_risk"], x["group"]))
+
+
+def compare_full(left: pd.DataFrame, right: pd.DataFrame, cfg: dict) -> tuple[pd.DataFrame, dict, dict, pd.DataFrame]:
+    """Like compare, and also returns the pairs that matched (key, rows and amounts) for the report."""
     lname, rname = cfg["left"], cfg["right"]
     tol = float(cfg.get("tolerance", 0.01))
     la_col, ra_col = cfg.get("left_amount"), cfg.get("right_amount")
@@ -79,6 +115,7 @@ def compare(left: pd.DataFrame, right: pd.DataFrame, cfg: dict) -> tuple[pd.Data
     merged = Lu.merge(Ru, on="key", how="outer", suffixes=("_l", "_r"), indicator="origin")
     matched = 0
     matched_amount = 0.0
+    pairs: list[dict] = []
     for r in merged.itertuples():
         key = str(r.raw_l if isinstance(r.raw_l, str) or not pd.isna(r.raw_l) else r.raw_r).strip()
         if r.origin == "left_only":
@@ -105,6 +142,8 @@ def compare(left: pd.DataFrame, right: pd.DataFrame, cfg: dict) -> tuple[pd.Data
                     continue
                 matched_amount += float(la)
             matched += 1
+            pairs.append({"key": key, "left_row": lrow, "right_row": rrow,
+                          "left_amount": _money(r.amount_l) if use_amount else None, "right_amount": _money(r.amount_r) if use_amount else None})
 
     out = pd.DataFrame(exc, columns=["kind", "key", "left_row", "right_row", "left_amount", "right_amount", "difference", "reason"])
     if len(out):
@@ -127,7 +166,11 @@ def compare(left: pd.DataFrame, right: pd.DataFrame, cfg: dict) -> tuple[pd.Data
                "unmatched_left_amount": round(float(gone_r.sum()), 2) if use_amount else None,
                "unmatched_right_amount": round(float(gone_l.sum()), 2) if use_amount else None,
                "net_difference": round(float(mism["difference"].sum()), 2) if len(mism) else 0.0}
-    return out, metrics, details
+    group_col = str(cfg.get("group_by") or "").strip()
+    if group_col:
+        details["group_by"] = {"column": group_col, "rows": by_group(out, left, right, group_col)}
+    matched_df = pd.DataFrame(pairs, columns=["key", "left_row", "right_row", "left_amount", "right_amount"])
+    return out, metrics, details, matched_df
 
 
 def summary_line(m: dict, lname: str, rname: str) -> str:

@@ -106,9 +106,10 @@ function CompareFields({ c, upd, steps }: { c: Cfg; upd: (k: string, v: any) => 
         {text("left_key", "Matching column in the first table", "waybill")}{text("right_key", "Matching column in the second table", "reference")}</div>
       <div className="grid gap-3 sm:grid-cols-2">
         {text("left_amount", "Amount column in the first table (optional)", "cod_amount")}{text("right_amount", "Amount column in the second table (optional)", "amount")}</div>
+      {text("group_by", "Summarise exceptions by this column (optional)", "driver")}
       <label className="block">Allowed difference
         <input type="number" step="0.01" min="0" className={input} value={c.tolerance ?? 0.01} onChange={(e) => upd("tolerance", Number(e.target.value))} /></label>
-      <p className="text-xs text-slate-500">Each row in the first table is matched to one row in the second by the matching column. Rows with no partner, duplicates and amounts that differ become exceptions with a reason. A table is created by a Load file step, so add those first.</p>
+      <p className="text-xs text-slate-500">Each row in the first table is matched to one row in the second by the matching column. If you name a column such as driver, each driver gets a summary of exceptions and money at risk. Rows with no partner, duplicates and amounts that differ become exceptions with a reason. A table is created by a Load file step, so add those first.</p>
     </div>);
 }
 

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import ExecutionDetail from "./ExecutionDetail";
 
@@ -66,4 +66,19 @@ test("a reconciliation run shows its totals and every exception with the reason 
   expect(screen.queryByRole("link", { name: "Cleaned data (CSV)" })).toBeNull();  // generic cleaning downloads make no sense here
   expect(screen.getByRole("link", { name: "Excel report" })).toBeInTheDocument();
   result = null;
+});
+
+test("a reconciliation grouped by driver shows each driver's exceptions and amount at risk", async () => {
+  status = "success";
+  steps = [{ position: 1, step_id: "s4", step_type: "compare", name: "Match", status: "success", attempts: 1, message: "ok", duration_ms: 1 }];
+  result = { metrics: { matched_rows: 53, exceptions: 10, amount_mismatches: 5, missing_in_right: 2, missing_in_left: 2, duplicate_keys: 1, amount_difference: 123.5, unmatched_amount: 1302.81 },
+    details: { comparisons: [{ left: "system", right: "pos", tolerance: 0, group_by: { column: "driver", rows: [
+      { group: "DRV-104", rows: 12, exceptions: 2, net_difference: 0.5, no_partner: 790.82, at_risk: 791.32 },
+      { group: "DRV-101", rows: 12, exceptions: 3, net_difference: -10, no_partner: 140, at_risk: 150 }] } }] } };
+  show();
+  expect(await screen.findByText("Exceptions by driver")).toBeInTheDocument();
+  expect(screen.getByText("DRV-104")).toBeInTheDocument();
+  expect(screen.getByText("791.32")).toBeInTheDocument();
+  expect(screen.getByText("+0.50")).toBeInTheDocument();   // positive means the first file recorded more
+  expect(within(screen.getByText("DRV-101").closest("tr")!).getByText("-10.00")).toBeInTheDocument();
 });

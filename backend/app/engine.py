@@ -37,6 +37,7 @@ class Context:
         self.current: str = "main"
         self.inputs: dict[str, dict] = {}          # files chosen for this run: name -> {source, file}
         self.exceptions: pd.DataFrame | None = None  # what the Compare steps found
+        self.matched: pd.DataFrame | None = None     # the pairs that agreed, for the report
         self.metrics: dict = {"invalid_rows": 0, "missing_values": 0}
         self.details: dict = {}
         self.execution_id: int | None = None
@@ -204,7 +205,11 @@ def h_compare(cfg, ctx):
     for name, df, col in cols:
         if col not in df.columns:
             raise StepError(f"Missing required columns: '{col}' is not in table '{name}'. Columns there: {', '.join(map(str, df.columns))}")
-    out, metrics, details = reconcile.compare(left, right, cfg)
+    group = str(cfg.get("group_by") or "").strip()
+    if group and group not in left.columns and group not in right.columns:
+        raise StepError(f"Missing required columns: '{group}' (the column to group by) is in neither table")
+    out, metrics, details, matched = reconcile.compare_full(left, right, cfg)
+    ctx.matched = matched if ctx.matched is None else pd.concat([ctx.matched, matched], ignore_index=True)
     ctx.metrics.update(metrics)
     ctx.details.setdefault("comparisons", []).append(details)
     ctx.exceptions = out if ctx.exceptions is None else pd.concat([ctx.exceptions, out], ignore_index=True)
@@ -284,7 +289,8 @@ def _reconciliation_facts(ctx, c: dict) -> list:
             ("  Amount missing or unreadable", counts.get("unreadable_amount", 0)),
             ("  No key", counts.get("missing_key", 0))]
     if c.get("amounts_compared"):
-        rows += [("Allowed difference", c.get("tolerance")), ("Total of the amount differences", diff),
+        rows += [("Allowed difference", c.get("tolerance")), ("Amount of the rows that matched", c.get("matched_amount")),
+                 ("Total of the amount differences", diff),
                  ("Amount of rows with no partner", gone), ("Amount at risk (both added)", round(diff + gone, 2))]
     return rows
 
@@ -314,6 +320,20 @@ def h_report(cfg, ctx):
                 ex_out[c] = ex_out[c].map(lambda v: safe_cell(v) if isinstance(v, str) else v)
             ex_out.columns = ["Type", "Key", "Row in first table", "Row in second table", "First amount", "Second amount", "Difference", "Reason"]
             ex_out.to_excel(xw, sheet_name="Exceptions", index=False)
+        grp = comps[0].get("group_by") if comps else None
+        if grp and grp["rows"]:
+            label = grp["column"].replace("_", " ").capitalize()
+            g_out = pd.DataFrame(grp["rows"])
+            g_out["group"] = g_out["group"].map(lambda v: safe_cell(v) if isinstance(v, str) else v)
+            g_out.columns = [label, f"Rows in {comps[0]['left']}", "Exceptions", "Net difference (first minus second)", "Amount with no partner", "Amount at risk"]
+            g_out.to_excel(xw, sheet_name=f"By {label.lower()}"[:31], index=False)
+        if ctx.matched is not None and len(ctx.matched):
+            m_out = ctx.matched.head(MAX_ROWS).copy()
+            m_out["key"] = m_out["key"].map(lambda v: safe_cell(v) if isinstance(v, str) else v)
+            m_out.columns = ["Key", "Row in first table", "Row in second table", "First amount", "Second amount"]
+            if m_out["First amount"].isna().all():
+                m_out = m_out.drop(columns=["First amount", "Second amount"])
+            m_out.to_excel(xw, sheet_name="Matched", index=False)
         prof.to_excel(xw, sheet_name="Columns", index=False)
         safe.to_excel(xw, sheet_name="Data", index=False)
         for ws in xw.book.worksheets:

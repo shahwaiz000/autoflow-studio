@@ -6,16 +6,17 @@ A business workflow automation platform. You build workflows from simple steps, 
 
 ## What it is for
 
-Finance and operations teams spend hours every day checking one list against another: cash collected by couriers against bank deposits, payments against invoices. AutoFlow Studio does that matching for you and hands back a short list of **exceptions**, each with a reason in plain words, so people only look at what is actually wrong.
+Finance and operations teams spend hours every day checking one list against another: cash collected by couriers against bank deposits, orders closed in the system against what the drivers' POS machines collected. AutoFlow Studio does that matching for you and hands back a short list of **exceptions**, each with a reason in plain words, so people only look at what is actually wrong.
 
 ## What works today
 
 **The core: COD reconciliation**
 
 - **Match and compare.** Choose a courier collections file and a bank deposits file (CSV or Excel). Each waybill is matched to its bank reference, ignoring case and stray spaces, and the amounts are compared within an allowed difference. Matching is one row to one row.
+- **POS collection reconciliation.** A second template built on the same matching: orders closed in your system against the POS collection records from the drivers, matched by order ID with no allowed difference. A positive difference means the system recorded more than the POS collected. A "by driver" table (also an Excel sheet) shows each driver's exceptions and money at risk, and a "Matched" sheet lists every order whose amounts agree.
 - **Exceptions with reasons.** Everything that does not agree is listed: amount differs, missing in the bank file, missing in the courier file, duplicate waybill, amount missing or unreadable, no key. Each says which row it is in. The run page has totals, a filter and a CSV download. Up to 5,000 exceptions per run are stored.
 - **Review and audit trail.** On a run page, check one or more exceptions and Approve (the difference is understood and accepted), Reject (needs follow-up, a note is required) or Reopen. Each exception shows who decided, when and the note, and the run shows "3 of 7 reviewed". Every decision is written to an Audit trail page with who, when and what changed. The app can add entries but never edit or delete them (also blocked in the database layer). The Overview counts what is still to review, and the exceptions CSV includes the decisions.
-- **Reports.** An Excel workbook with Summary, Exceptions, Columns and Data sheets, and the exceptions as CSV. Text that looks like a formula is neutralised.
+- **Reports.** An Excel workbook with Summary, Exceptions, By driver (when a grouping column is set), Matched, Columns and Data sheets, and the exceptions as CSV. Text that looks like a formula is neutralised.
 - **Messy data tolerated.** Amounts like "SAR 1,234.50" or "(500.00)", dates in mixed formats and untidy references can be tidied first. Anything unreadable is counted and shown, never guessed.
 - **Overview page.** The latest reconciliation (match rate, exceptions, amount at risk), what is wrong by type, exceptions per day, and recent runs. Every number comes from stored results.
 - **Run history.** Every run, which files it used, a step-by-step log and a flow diagram showing the path it took.
@@ -26,10 +27,10 @@ Finance and operations teams spend hours every day checking one list against ano
 
 - **Data files.** Add, preview and delete CSV and Excel files. Files are stored under random names.
 - **Reconciliations page.** Run a saved workflow on files you choose at that moment (or add one on the spot). It runs in the background so the page never freezes.
-- **Template and visual builder.** Start from the COD Reconciliation template, or draw your own with drag and drop. A drawing is checked before saving. Only a fixed list of step types can run, so no user-written code is executed.
+- **Template and visual builder.** Start from the COD or POS Collection Reconciliation template, or draw your own with drag and drop. A drawing is checked before saving. Only a fixed list of step types can run, so no user-written code is executed.
 - **Assistant (rules-based, not an AI model).** Describe a reconciliation in plain English and get a proposed workflow with the reason for each step. It can also explain a workflow and summarise why runs failed. It is free and works offline.
 - **Login.** One owner account, scrypt password hashing, HttpOnly session cookie, lockout after five wrong passwords, origin check on changes.
-- **Tests.** 179 backend tests (pytest) and 82 frontend tests (Vitest).
+- **Tests.** 186 backend tests (pytest) and 83 frontend tests (Vitest).
 
 ## Not built yet
 
@@ -37,7 +38,9 @@ A workflow step that pauses a run until someone approves it (review happens afte
 
 ## Sample data
 
-Two fictional files, `courier_collections.csv` (61 rows) and `bank_deposits.csv` (58 rows), with 7 planted differences: 3 collections never deposited, 2 amounts that differ, 1 deposit nobody collected and 1 duplicate waybill. The right answer is known (55 matched, 7 exceptions), which is how the tests check the matching. Versions before this one shipped unrelated demo workflows and randomly generated runs. They were removed, and on start-up any such leftovers that you never used are cleaned away.
+For POS reconciliation: `pos_system_orders.csv` (60 orders) and `pos_collections.csv` (61 rows), with 10 planted exceptions: 5 wrong amounts, 2 orders with no POS payment, 2 POS payments with no order and 1 payment recorded twice. The right answer is known (53 matched, 10 exceptions) and the tests check it, including that the per-driver totals add up to the overall amount at risk.
+
+For COD reconciliation: Two fictional files, `courier_collections.csv` (61 rows) and `bank_deposits.csv` (58 rows), with 7 planted differences: 3 collections never deposited, 2 amounts that differ, 1 deposit nobody collected and 1 duplicate waybill. The right answer is known (55 matched, 7 exceptions), which is how the tests check the matching. Versions before this one shipped unrelated demo workflows and randomly generated runs. They were removed, and on start-up any such leftovers that you never used are cleaned away.
 
 ## Technology (all free)
 

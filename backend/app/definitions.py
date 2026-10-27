@@ -22,7 +22,7 @@ KEYS = {
     "validate": {"required_columns", "numeric_columns", "fail_on_errors", "table"},
     "condition": {"field", "op", "value", "on_true", "on_false"},
     "transform": {"operations", "numeric_columns", "amount_columns", "date_columns", "text_columns", "dayfirst", "table"},
-    "compare": {"left", "right", "left_key", "right_key", "left_amount", "right_amount", "tolerance"},
+    "compare": {"left", "right", "left_key", "right_key", "left_amount", "right_amount", "tolerance", "group_by"},
     "notify": {"to", "message"}, "report": {"table"}, "end": set(),
 }
 
@@ -127,6 +127,11 @@ def _clean_config(t, cfg, where, errs):
         if isinstance(tol, bool) or not isinstance(tol, (int, float)) or not 0 <= tol <= 1_000_000:
             errs.append(f"{where}: the allowed difference must be a number from 0 up")
         out["tolerance"] = tol
+        group = str(cfg.get("group_by") or "").strip()
+        if group and not _text(group, 60):
+            errs.append(f"{where}: the column to group by is too long")
+        elif group:
+            out["group_by"] = group
     elif t == "notify":
         out = {"to": cfg.get("to", ""), "message": cfg.get("message", "")}
         if not _text(out["to"], 120) or not _text(out["message"], 300):

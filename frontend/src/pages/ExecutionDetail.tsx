@@ -4,7 +4,7 @@ import FlowDiagram from "../components/FlowDiagram";
 import { useEffect } from "react";
 import { formatDate, formatDuration, inProgress, useApi } from "../lib";
 import ExceptionReview from "../components/ExceptionReview";
-import type { Execution, Workflow } from "../types";
+import type { Execution, GroupBy, Workflow } from "../types";
 
 function RunDiagram({ ex }: { ex: Execution }) {
   const { data } = useApi<Workflow>(`/workflows/${ex.workflow_id}`);
@@ -20,10 +20,36 @@ function RunDiagram({ ex }: { ex: Execution }) {
 
 const money = (n: number | null | undefined) => (n == null ? "-" : n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 
+function ByGroup({ g }: { g: GroupBy }) {
+  const label = g.column.replace(/_/g, " ");
+  return (
+    <div className="mb-6">
+      <h3 className="mb-1 text-sm font-semibold text-navy-900">Exceptions by {label}</h3>
+      <p className="mb-3 text-xs text-slate-500">Net difference is the first file minus the second, so a positive number means the first file recorded more than the second.</p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead className="text-xs font-medium text-slate-500"><tr>
+            <th className="pb-2 pr-3 capitalize">{label}</th><th className="pb-2 pr-3 text-right">Rows</th><th className="pb-2 pr-3 text-right">Exceptions</th>
+            <th className="pb-2 pr-3 text-right">Net difference</th><th className="pb-2 pr-3 text-right">No partner</th><th className="pb-2 text-right">Amount at risk</th></tr></thead>
+          <tbody>{g.rows.map((r) => (
+            <tr key={r.group} className="border-t border-slate-100 transition-colors hover:bg-slate-50/70">
+              <td className="py-2.5 pr-3 font-medium text-navy-900">{r.group}</td>
+              <td className="num pr-3 text-right text-slate-500">{r.rows}</td>
+              <td className="num pr-3 text-right">{r.exceptions}</td>
+              <td className="num pr-3 text-right">{r.net_difference > 0 ? "+" : ""}{money(r.net_difference)}</td>
+              <td className="num pr-3 text-right">{money(r.no_partner)}</td>
+              <td className="num text-right font-semibold text-sun-dark">{money(r.at_risk)}</td>
+            </tr>))}</tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function Reconciliation({ ex }: { ex: Execution }) {
   const m = ex.result?.metrics ?? {};
   const raw = ex.result?.details as { comparisons?: Record<string, unknown>[] } | undefined;
-  const d = (raw?.comparisons?.[0] ?? {}) as { left?: string; right?: string; tolerance?: number | null };
+  const d = (raw?.comparisons?.[0] ?? {}) as { left?: string; right?: string; tolerance?: number | null; group_by?: GroupBy };
   const tiles: [string, string | number][] = [
     ["Rows matched", m.matched_rows ?? 0], ["Exceptions", m.exceptions ?? 0], ["Amount differences", m.amount_mismatches ?? 0],
     ["Missing in " + (d.right ?? "second table"), m.missing_in_right ?? 0], ["Missing in " + (d.left ?? "first table"), m.missing_in_left ?? 0],
@@ -43,6 +69,7 @@ function Reconciliation({ ex }: { ex: Execution }) {
       </dl>
       {(m.unmatched_amount ?? 0) > 0 || (m.amount_difference ?? 0) > 0 ? (
         <p className="mb-5 text-sm text-slate-600">Total amount difference on mismatches: <b>{money(m.amount_difference)}</b>. Amount of unmatched rows: <b>{money(m.unmatched_amount)}</b>.</p>) : null}
+      {!!d.group_by?.rows.length && <ByGroup g={d.group_by} />}
       <ExceptionReview executionId={ex.id} />
     </Card>
   );

@@ -85,3 +85,5 @@ export interface AuditEvent { id: number; at: string; actor: string; action: str
 export interface AuditList { total: number; items: AuditEvent[] }
 
 export interface EmailStatus { configured: boolean; host: string | null; port: number; sender: string | null; security: string; allowed_domains: string[] }
+
+export interface GroupBy { column: string; rows: { group: string; rows: number; exceptions: number; net_difference: number; no_partner: number; at_risk: number }[] }
