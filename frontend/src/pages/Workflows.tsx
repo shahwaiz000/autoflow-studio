@@ -7,13 +7,13 @@ import type { Execution, RunInput, Workflow } from "../types";
 
 function Steps({ id }: { id: number }) {
   const { data, error } = useApi<Workflow>(`/workflows/${id}`);
-  if (error) return <p className="text-sm text-red-700">{error}</p>;
+  if (error) return <p className="text-sm text-coral-dark">{error}</p>;
   if (!data) return <p className="text-sm text-slate-500">Loading steps...</p>;
   return (
     <ol className="mt-3 space-y-1.5 border-t border-slate-100 pt-3 text-sm">
       {data.definition?.steps.map((s, i) => (
-        <li key={s.id} className="flex gap-3"><span className="w-5 text-slate-400">{i + 1}</span>
-          <span className="font-medium">{s.name}</span><span className="text-slate-400">{s.type}</span></li>
+        <li key={s.id} className="flex gap-3"><span className="num w-5 text-slate-400">{i + 1}</span>
+          <span className="font-medium text-navy-900">{s.name}</span><span className="text-slate-400">{s.type}</span></li>
       ))}
     </ol>
   );
@@ -63,52 +63,52 @@ export default function Workflows() {
     <>
       <PageHeader title="Reconciliations" subtitle="Each one is a saved workflow. Run it on the files you choose, or start from the COD Reconciliation template.">
         <div className="flex flex-wrap gap-2">
-          <Link to="/templates" className="rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand-dark">Start from a template</Link>
-          <Link to="/builder" className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50">Build your own</Link>
+          <Link to="/templates" className="rounded-lg bg-brand px-3.5 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-brand-dark">Start from a template</Link>
+          <Link to="/builder" className="rounded-lg bg-white px-3.5 py-2 text-sm font-medium text-navy-900 shadow-card transition-colors hover:bg-slate-50">Build your own</Link>
           <input aria-label="Search workflows" placeholder="Search workflows" value={search} onChange={(e) => setSearch(e.target.value)}
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-          <select aria-label="Filter by status" value={filter} onChange={(e) => setFilter(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            className="rounded-lg border-0 bg-white px-3 py-2 text-sm shadow-card transition-shadow focus:shadow-lift" />
+          <select aria-label="Filter by status" value={filter} onChange={(e) => setFilter(e.target.value)} className="rounded-lg border-0 bg-white px-3 py-2 text-sm shadow-card transition-shadow focus:shadow-lift">
             <option value="">All</option><option value="true">Enabled</option><option value="false">Disabled</option>
           </select>
         </div>
       </PageHeader>
       {result && (
-        <p role="status" className={`mb-4 rounded-lg px-4 py-3 text-sm ${result.ok ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-800"}`}>
+        <p role="status" className={`mb-5 rounded-xl px-4 py-3 text-sm ${result.ok ? "bg-mint-soft text-mint-dark" : "bg-coral-soft text-coral-dark"}`}>
           {result.text} {result.id && <Link className="ml-2 font-medium underline" to={`/executions/${result.id}`}>View logs</Link>}
         </p>
       )}
       {loading && !data ? <Loading /> : error ? <ErrorBox message={error} retry={reload} /> : !data?.length ? (
         <Card><Empty title="No workflows match" hint="Clear the search or filter." /></Card>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-5 lg:grid-cols-2">
           {data.map((w) => (
             <Card key={w.id}>
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h2 className="font-semibold text-slate-900">{w.name}</h2>
-                  <p className="text-xs text-slate-500">{w.category} - {w.step_count} steps - {w.run_count} runs</p>
+                  <h2 className="text-base font-semibold text-navy-900">{w.name}</h2>
+                  <p className="mt-0.5 text-xs text-slate-500">{w.category} - {w.step_count} steps - {w.run_count} runs</p>
                 </div>
                 {w.last_status && <StatusBadge status={w.last_status} />}
               </div>
-              <p className="mt-2 text-sm text-slate-600">{w.description}</p>
-              <div className="mt-4 flex items-center gap-2">
+              <p className="mt-3 text-sm leading-relaxed text-slate-600">{w.description}</p>
+              <div className="mt-5 flex flex-wrap items-center gap-2">
                 <button onClick={() => (w.inputs?.length ? setChoosing(choosing === w.id ? null : w.id) : run(w))} disabled={!w.enabled || busy === w.id}
-                  className="rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-50">
+                  className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-50">
                   {busy === w.id ? "Running..." : "Run workflow"}
                 </button>
-                <button onClick={() => toggle(w)} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50">{w.enabled ? "Disable" : "Enable"}</button>
-                <Link to={`/builder/${w.id}`} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50">Edit</Link>
-                {!w.built_in && <button onClick={() => remove(w)} className="rounded-lg border border-red-200 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50">Delete</button>}
+                <button onClick={() => toggle(w)} className="rounded-lg px-3 py-2 text-sm text-slate-600 transition-colors hover:bg-slate-100 hover:text-navy-900">{w.enabled ? "Disable" : "Enable"}</button>
+                <Link to={`/builder/${w.id}`} className="rounded-lg px-3 py-2 text-sm text-slate-600 transition-colors hover:bg-slate-100 hover:text-navy-900">Edit</Link>
+                {!w.built_in && <button onClick={() => remove(w)} className="rounded-lg px-3 py-2 text-sm text-coral-dark transition-colors hover:bg-coral-soft">Delete</button>}
                 <button onClick={() => setOpen(open === w.id ? null : w.id)} aria-expanded={open === w.id} className="ml-auto text-sm text-brand-dark hover:underline">
                   {open === w.id ? "Hide steps" : "View steps"}
                 </button>
               </div>
               {erasing === w.id && (
-                <div role="alertdialog" aria-label={`Delete ${w.name} with its history`} className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+                <div role="alertdialog" aria-label={`Delete ${w.name} with its history`} className="mt-4 rounded-xl bg-coral-soft p-4 text-sm text-coral-dark">
                   <p><b>{w.name}</b> has {w.run_count} runs. Deleting it erases the workflow, its schedules and all {w.run_count} runs with their reports. This cannot be undone.</p>
                   <div className="mt-2 flex gap-2">
-                    <button onClick={() => remove(w, true)} className="rounded-lg bg-red-600 px-3 py-1.5 font-medium text-white hover:bg-red-700">Delete with its history</button>
-                    <button onClick={() => setErasing(null)} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 hover:bg-slate-50">Keep it</button>
+                    <button onClick={() => remove(w, true)} className="rounded-lg bg-coral px-3 py-1.5 font-medium text-white transition-colors hover:bg-coral-dark">Delete with its history</button>
+                    <button onClick={() => setErasing(null)} className="rounded-lg bg-white px-3 py-1.5 text-navy-900 shadow-card transition-colors hover:bg-slate-50">Keep it</button>
                   </div>
                 </div>
               )}
