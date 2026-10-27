@@ -17,10 +17,10 @@ export function StatusBadge({ status }: { status: Status | string }) {
 }
 
 export const Card = ({ title, action, children, className = "" }: { title?: string; action?: ReactNode; children: ReactNode; className?: string }) => (
-  <section className={`rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card ${className}`}>
+  <section className={`rounded-[14px] bg-white p-5 shadow-card sm:p-6 ${className}`}>
     {(title || action) && (
       <div className="mb-4 flex items-center justify-between gap-3">
-        {title && <h2 className="text-sm font-semibold text-slate-900">{title}</h2>}
+        {title && <h2 className="text-[15px] font-semibold text-navy-900">{title}</h2>}
         {action}
       </div>
     )}
@@ -31,7 +31,7 @@ export const Card = ({ title, action, children, className = "" }: { title?: stri
 export const PageHeader = ({ title, subtitle, children }: { title: string; subtitle?: string; children?: ReactNode }) => (
   <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
     <div>
-      <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{title}</h1>
+      <h1 className="text-[26px] font-semibold leading-tight text-navy-900">{title}</h1>
       {subtitle && <p className="mt-1 text-sm text-slate-500">{subtitle}</p>}
     </div>
     {children}

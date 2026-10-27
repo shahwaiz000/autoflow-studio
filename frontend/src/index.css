@@ -1,9 +1,10 @@
-@import "@fontsource-variable/inter";
+@import "@fontsource-variable/ibm-plex-sans";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-body { @apply bg-canvas text-slate-800 antialiased; font-feature-settings: "cv11", "ss01"; }
+body { @apply bg-canvas text-slate-700 antialiased; }
+h1, h2, h3 { letter-spacing: -0.015em; }
 :focus-visible { @apply outline-2 outline-offset-2 outline-brand; }
 
 /* Numbers line up in columns and do not jump while values change. */
@@ -13,6 +14,6 @@ body { @apply bg-canvas text-slate-800 antialiased; font-feature-settings: "cv11
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
 
-.react-flow .react-flow__handle { width: 14px; height: 14px; background: #5b5ff0; border: 2px solid #fff; }
-.react-flow .react-flow__handle:hover { background: #4549d6; }
+.react-flow .react-flow__handle { width: 14px; height: 14px; background: #2b50d8; border: 2px solid #fff; }
+.react-flow .react-flow__handle:hover { background: #1e3db0; }
 .react-flow__edge-text { font-size: 11px; font-weight: 600; }

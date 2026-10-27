@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import Dashboard from "./Dashboard";
+import Dashboard, { buildMarks } from "./Dashboard";
 
 const base = {
   days: 30, totals: { reconciliations: 1, runs: 2, failed: 1, running: 0, workflows: 1 },
@@ -22,7 +22,7 @@ function show(body: unknown) {
 it("shows the latest reconciliation: match rate, exceptions, amount at risk and what is wrong", async () => {
   show({ ...base, latest });
   expect(await screen.findByText(/Latest reconciliation: courier compared with bank/)).toBeInTheDocument();
-  expect(screen.getByText("88.7%")).toBeInTheDocument();
+  expect(screen.getByText("88.7")).toBeInTheDocument();  // the % sign is a smaller span next to it
   expect(screen.getByText("55 of 62 rows matched")).toBeInTheDocument();
   expect(screen.getByText("2,103.41")).toBeInTheDocument();
   expect(screen.getByText("7 found, 2 approved, 1 rejected")).toBeInTheDocument();  // the big number is what is still to review
@@ -39,4 +39,25 @@ it("before any reconciliation, explains how to run the first one instead of show
   show({ ...base, latest: null, last_failure: null, recent: [], totals: { reconciliations: 0, runs: 0, failed: 0, running: 0, workflows: 1 } });
   expect(await screen.findByText("No reconciliation has been run yet")).toBeInTheDocument();
   expect(screen.queryByText(/Exceptions found per day/)).toBeNull();
+});
+
+it("draws one mark per matched pair or exception and says what they mean", async () => {
+  show({ ...base, latest });
+  const strip = await screen.findByRole("img", { name: "55 matched, 4 waiting for review, 2 approved, 1 rejected" });
+  expect(strip.children).toHaveLength(62);
+  expect(screen.getByRole("link", { name: "Review 4 exceptions" })).toHaveAttribute("href", "/executions/9");
+});
+
+it("shows no review button when every exception is reviewed", async () => {
+  show({ ...base, latest: { ...latest, review: { pending: 0, approved: 5, rejected: 2 } } });
+  expect(await screen.findByText("Every exception is reviewed")).toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: /^Review/ })).toBeNull();
+});
+
+it("groups long runs so the strip stays readable and keeps the most urgent state in each group", () => {
+  const marks = buildMarks(1000, 0, 0, 3);
+  expect(marks.length).toBeLessThanOrEqual(120);
+  expect(marks.reduce((n, m) => n + m.size, 0)).toBe(1003);
+  expect(marks[marks.length - 1].state).toBe("pending");
+  expect(buildMarks(2, 1, 1, 1).map((m) => m.state)).toEqual(["matched", "matched", "approved", "rejected", "pending"]);
 });
